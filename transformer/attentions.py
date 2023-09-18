@@ -2,9 +2,11 @@
 Multi-head attention
 - paper: Attention Is All You Need http://arxiv.org/abs/1706.03762v7
   - sec 3.2
+
+- https://pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html
 - https://nn.labml.ai/transformers/mha.html
 - https://github.com/sooftware/attentions/blob/master/attentions.py
-- https://pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html
+- https://github.com/xmu-xiaoma666/External-Attention-pytorch/blob/master/model/attention/SelfAttention.py
 '''
 
 import numpy as np
@@ -56,6 +58,9 @@ class ScaledDotProductAttention(nn.Module):
             scores = dropout(scores)
 
         attention = torch.softmax(scores, dim=-1)
+
+        cprint(attention.shape)
+        cprint(value.shape)
         context = torch.matmul(attention, value)
         return context, attention
 
@@ -164,8 +169,6 @@ if __name__ == '__main__':
         cprint(attn_weights.shape)
         cprint(attn_weights)
 
-    # test_scaled_dot_product_attention()
-
     def test_multihead_attention():
         head_size = 8  # (B, T, C) -> (B, T, head_size)
 
@@ -177,4 +180,5 @@ if __name__ == '__main__':
         cprint(attn_weights.shape)
         cprint(attn_weights)
 
-    test_multihead_attention()
+    test_scaled_dot_product_attention()
+    # test_multihead_attention()
