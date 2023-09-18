@@ -1,5 +1,29 @@
 import inspect
 
+
+def print_methods(obj):
+    """
+    Replace print(dir(obj)) with print_methods(obj) to get a more readable output.
+    Split items based on their types
+    """
+
+    magic_methods = [x for x in dir(obj) if x.startswith("__") and x.endswith("__")]
+    private_methods = [x for x in dir(obj) if x.startswith("_") and not x in magic_methods]
+    public_methods = [x for x in dir(obj) if not x.startswith("_")]
+
+    print("\n\033[93mMagic Methods:\033[0m")
+    for item in sorted(magic_methods):
+        print(f"    {item}")
+
+    print("\n\033[93mPrivate Methods:\033[0m")
+    for item in sorted(private_methods):
+        print(f"    {item}")
+
+    print("\n\033[93mPublic Methods:\033[0m")
+    for item in sorted(public_methods):
+        print(f"    {item}")
+
+
 def cprint(expr, _globals=None, _locals=None):
     """
     Custom print function that prints the name of the variable/expression
