@@ -48,28 +48,59 @@ class SinusoidalPositionalEncoding(nn.Module):
         self.pe[:, :, 0::2] = torch.sin(pos * div_term)
         self.pe[:, :, 1::2] = torch.cos(pos * div_term)
 
-    def forward(self, x):
+    def forward(self, x: Tensor):
         x = x + self.pe[:, :x.shape[1], :].to(x.device)
-        return self.dropout(x)
+        return self.dropout(x)  # [batch size, time steps (seq length), channels]
 
 
 class LearnedPositionalEncoding(nn.Module):
     """
     Create learned positional encoding with the specified maximum length `max_len`
     and embedding size `num_hiddens`.
-    This version uses an nn.Embedding layer for positional encoding, similar to the nanoGPT example.
+    This version uses an nn.Embedding layer for positional encoding, similar to the nanoGPT.
     """
 
     def __init__(self, num_hiddens: int, dropout: float, max_len: int = 1000):
         super().__init__()
         self.dropout = nn.Dropout(dropout)
-        self.positional_encodings = nn.Embedding(max_len, num_hiddens)
+        self.pe = nn.Embedding(max_len, num_hiddens)
         self.num_hiddens = num_hiddens
 
-    def forward(self, x: torch.Tensor):
-        # where B is batch size and T is sequence length (block size)
-        B, T = x.shape
-        positions = torch.arange(T, device=x.device).expand(B, T)  # Create a sequence of positions
-        x = x + self.positional_encodings(positions)  # [B, T, C]
-        return self.dropout(x)
+    def forward(self, x: Tensor):
+        # B, T = x.shape, where B is batch size and T is sequence length (block size)
+        pos = torch.arange(x.shape[1], device=x.device).expand(x.shape[0], x.shape[1])
+        x = x + self.pe(pos)
+        return self.dropout(x)  # [batch size, time steps (seq length), channels]
+
+
+if __name__ == '__main__':
+    # Generating random inputs
+    B, T, C = 4, 8, 32  # batch size, time steps (seq length), channels
+    x = torch.rand(B, T, C)
+    # x = torch.rand(B, T)
+    tril = torch.tril(torch.ones(T, T))  # for mask
+
+    def test_simple_sinusoidal_positional_encoding():
+        pe = SimpleSinusoidalPositionalEncoding(C, max_len=T)
+
+        assert pe.shape == (T, C)
+        
+        cprint(pe)
+        cprint(pe.shape)
+
+    def test_sinusoidal_positional_encoding():
+        pe = SinusoidalPositionalEncoding(C, dropout=0.1, max_len=T)
+        y = pe(x)
+        cprint(y)
+        cprint(y.shape)
+    
+    def test_learned_positional_encoding():
+        pe = LearnedPositionalEncoding(C, dropout=0.1, max_len=T)
+        y = pe(x)
+        cprint(y)
+        cprint(y.shape)
+
+    # test_simple_sinusoidal_positional_encoding()
+    test_sinusoidal_positional_encoding()
+    # test_learned_positional_encoding()
 
