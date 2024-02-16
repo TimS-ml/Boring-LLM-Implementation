@@ -13,16 +13,11 @@ import numpy as np
 import torch 
 import torch.nn as nn
 import torch.nn.functional as F
-from torch import Tensor
-
 # from einops import rearrange
 
-import sys
-sys.path.append('..')
-from utils.utils import cprint, cprint_str
-
-from typing import Optional, Tuple
-
+from utils import *
+from torch import Tensor
+from typing import Optional, Tuple, Union
 
 
 class ScaledDotProductAttention(nn.Module):
