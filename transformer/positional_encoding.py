@@ -37,7 +37,7 @@ class SinusoidalPositionalEncoding(nn.Module):
     and embedding size `num_hiddens`.
     """
 
-    def __init__(self, num_hiddens: int, dropout: float, max_len: int = 1000):
+    def __init__(self, num_hiddens: int, dropout: float = 0.1, max_len: int = 1000):
         super().__init__()
         self.dropout = nn.Dropout(dropout)
         # Create a long enough P
@@ -60,7 +60,7 @@ class LearnedPositionalEncoding(nn.Module):
     This version uses an nn.Embedding layer for positional encoding, similar to the nanoGPT.
     """
 
-    def __init__(self, num_hiddens: int, dropout: float, max_len: int = 1000):
+    def __init__(self, num_hiddens: int, dropout: float = 0.1, max_len: int = 1000):
         super().__init__()
         self.dropout = nn.Dropout(dropout)
         self.pe = nn.Embedding(max_len, num_hiddens)
@@ -91,14 +91,24 @@ if __name__ == '__main__':
     def test_sinusoidal_positional_encoding():
         pe = SinusoidalPositionalEncoding(C, dropout=0.1, max_len=T)
         y = pe(x)
+
+        assert y.shape == x.shape, "Output shape should match input shape."
+        # assert y.sum() >= x.sum(), "Expecting learned positional encoding to increase the sum of elements. Even after Dropout."
+
         cprint(y)
         cprint(y.shape)
+        # print(y.sum(), ' ', x.sum())
     
     def test_learned_positional_encoding():
         pe = LearnedPositionalEncoding(C, dropout=0.1, max_len=T)
         y = pe(x)
+
+        assert y.shape == x.shape, "Output shape should match input shape."
+        # assert y.sum() >= x.sum(), "Expecting learned positional encoding to increase the sum of elements. Even after Dropout."
+
         cprint(y)
         cprint(y.shape)
+        # print(y.sum(), ' ', x.sum())
 
     # test_simple_sinusoidal_positional_encoding()
     test_sinusoidal_positional_encoding()
