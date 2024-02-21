@@ -37,9 +37,13 @@ class SinusoidalPositionalEncoding(nn.Module):
     and embedding size `num_hiddens`.
     """
 
-    def __init__(self, num_hiddens: int, dropout: float = 0.1, max_len: int = 1000):
+    def __init__(self, num_hiddens: int, dropout: Optional[float] = None, max_len: int = 1000):
         super().__init__()
-        self.dropout = nn.Dropout(dropout)
+        if dropout is not None:
+            self.dropout = nn.Dropout(dropout)
+        else:
+            self.dropout = None
+
         # Create a long enough P
         self.pe = torch.zeros((1, max_len, num_hiddens))
 
@@ -50,7 +54,11 @@ class SinusoidalPositionalEncoding(nn.Module):
 
     def forward(self, x: Tensor):
         x = x + self.pe[:, :x.shape[1], :].to(x.device)
-        return self.dropout(x)  # [batch size, time steps (seq length), channels]
+
+        # [batch size, time steps (seq length), channels]
+        if self.dropout is not None:
+            return self.dropout(x)
+        return x
 
 
 class LearnedPositionalEncoding(nn.Module):
@@ -60,9 +68,13 @@ class LearnedPositionalEncoding(nn.Module):
     This version uses an nn.Embedding layer for positional encoding, similar to the nanoGPT.
     """
 
-    def __init__(self, num_hiddens: int, dropout: float = 0.1, max_len: int = 1000):
+    def __init__(self, num_hiddens: int, dropout: Optional[float] = None, max_len: int = 1000):
         super().__init__()
-        self.dropout = nn.Dropout(dropout)
+        if dropout is not None:
+            self.dropout = nn.Dropout(dropout)
+        else:
+            self.dropout = None
+
         self.pe = nn.Embedding(max_len, num_hiddens)
         self.num_hiddens = num_hiddens
 
@@ -70,7 +82,11 @@ class LearnedPositionalEncoding(nn.Module):
         # B, T = x.shape, where B is batch size and T is sequence length (block size)
         pos = torch.arange(x.shape[1], device=x.device).expand(x.shape[0], x.shape[1])
         x = x + self.pe(pos)
-        return self.dropout(x)  # [batch size, time steps (seq length), channels]
+
+        # [batch size, time steps (seq length), channels]
+        if self.dropout is not None:
+            return self.dropout(x)
+        return x
 
 
 if __name__ == '__main__':
