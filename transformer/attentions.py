@@ -31,7 +31,7 @@ def SimpleScaledDotProductAttention(query: Tensor,
                                     dropout: Optional[float] = 0.0,
                                     attn_mask: Optional[Tensor] = None,
                                     is_causal: bool = False,
-                                    d_k: int = 0) -> torch.Tensor:
+                                    d_k: int = 0) -> Tensor:
     '''
     Scaled Dot-Product Attention
 
@@ -66,7 +66,8 @@ def SimpleScaledDotProductAttention(query: Tensor,
     # Generate a lower triangular matrix for causal masking
     if is_causal:
         assert attn_mask is None
-        temp_mask = torch.ones(query_len, key_len, dtype=torch.bool).tril(diagonal=0)
+        temp_mask = torch.ones(query_len, key_len,
+                               dtype=torch.bool).tril(diagonal=0)
         attn_bias.masked_fill_(temp_mask.logical_not(), float("-inf"))
         attn_bias.to(query.dtype)
 
@@ -109,7 +110,7 @@ class ScaledDotProductAttention(nn.Module):
                 query: Tensor,
                 key: Tensor,
                 value: Tensor,
-                mask: Optional[Tensor] = None) -> Tuple[Tensor, Tensor]:
+                mask: Optional[Tensor] = None) -> Tensor:
 
         # calculate the scaling factor
         if self.d_k == 0:
@@ -127,12 +128,13 @@ class ScaledDotProductAttention(nn.Module):
         if self.dropout is not None:
             scores = self.dropout(scores)
 
-        attention = torch.softmax(scores, dim=-1)
+        attn_weight = torch.softmax(scores, dim=-1)
 
-        cprint(attention.shape)
+        cprint(attn_weight.shape)
         cprint(value.shape)
-        context = torch.matmul(attention, value)
-        return context, attention
+        context = torch.matmul(attn_weight, value)
+        # return context, attn_weight
+        return context
 
 
 class MultiHeadAttention(nn.Module):
@@ -173,29 +175,26 @@ class MultiHeadAttention(nn.Module):
                 query: Tensor,
                 key: Tensor,
                 value: Tensor,
-                mask: Optional[Tensor] = None) -> Tuple[Tensor, Tensor]:
-        batch_size = query.size(0)
+                mask: Optional[Tensor] = None) -> Tensor:
 
         # split d_model (the last dimention) into num_heads * d_head
         # batch_size, seq_len, num_heads, d_head
-        query = self.query_proj(query).view(batch_size, -1, self.num_heads,
-                                            self.d_head)
-        key = self.key_proj(key).view(batch_size, -1, self.num_heads,
-                                      self.d_head)
-        value = self.value_proj(value).view(batch_size, -1, self.num_heads,
-                                            self.d_head)
+        batch_size = query.size(0)
+        query = self.query_proj(query)
+        query = query.view(batch_size, -1, self.num_heads, self.d_head)
+        key = self.key_proj(key)
+        key = key.view(batch_size, -1, self.num_heads, self.d_head)
+        value = self.value_proj(value)
+        value = value.view(batch_size, -1, self.num_heads, self.d_head)
 
         # permute the dimensions into batch_size * num_heads, seq_len, d_head
         # because in ScaledDotProductAttention we only care about the last two dims
-        query = query.permute(2, 0, 1,
-                              3).contiguous().view(batch_size * self.num_heads,
-                                                   -1, self.d_head)
-        key = key.permute(2, 0, 1,
-                          3).contiguous().view(batch_size * self.num_heads, -1,
-                                               self.d_head)
-        value = value.permute(2, 0, 1,
-                              3).contiguous().view(batch_size * self.num_heads,
-                                                   -1, self.d_head)
+        query = query.permute(2, 0, 1, 3).contiguous()
+        query = query.view(batch_size * self.num_heads, -1, self.d_head)
+        key = key.permute(2, 0, 1, 3).contiguous()
+        key = key.view(batch_size * self.num_heads, -1, self.d_head)
+        value = value.permute(2, 0, 1, 3).contiguous()
+        value = value.view(batch_size * self.num_heads, -1, self.d_head)
 
         # the Einops way
         # query = self.query_proj(query)
@@ -215,7 +214,7 @@ class MultiHeadAttention(nn.Module):
             # batch_size, num_heads, seq_len (Q), seq_len (K)
             mask = mask.repeat(1, self.num_heads, 1, 1)
 
-        context, attn = self.scaled_dot_attn(query, key, value, mask)
+        context = self.scaled_dot_attn(query, key, value, mask)
 
         # Reshape the context tensor back to the original form
         # unpack batch_size * num_heads, seq_len, d_head -> batch_size, seq_len, d_model
@@ -226,7 +225,7 @@ class MultiHeadAttention(nn.Module):
         # the Einops way
         # context = rearrange(context, '(b n) v d -> b v (n d)', b=batch_size, n=self.num_heads)
 
-        return context, attn
+        return context
 
 
 if __name__ == '__main__':
@@ -236,7 +235,7 @@ if __name__ == '__main__':
 
     # Generate a lower triangular matrix for causal masking
     # Then convert the lower triangular matrix to float; positions to attend to are marked as 0, others as -inf
-    tril = torch.tril(torch.ones(T, T))  
+    tril = torch.tril(torch.ones(T, T))
     mask = tril.float().masked_fill(tril == 0, float('-inf'))
     cprint(mask)
 
