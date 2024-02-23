@@ -20,7 +20,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 # from einops import rearrange
 
+import sys; from pathlib import Path; sys.path.append(str(Path(__file__).resolve().parent.parent))
 from utils import *
+
 from torch import Tensor
 from typing import Optional, Tuple, Union
 
@@ -28,7 +30,7 @@ from typing import Optional, Tuple, Union
 def SimpleScaledDotProductAttention(query: Tensor,
                                     key: Tensor,
                                     value: Tensor,
-                                    dropout: Optional[float] = 0.0,
+                                    dropout: Optional[float] = None,
                                     attn_mask: Optional[Tensor] = None,
                                     is_causal: bool = False,
                                     d_k: int = 0) -> Tensor:
@@ -79,8 +81,9 @@ def SimpleScaledDotProductAttention(query: Tensor,
 
     attn_weight = query @ key.transpose(-2, -1) * scale_factor
     attn_weight += attn_bias
-    attn_weight = torch.softmax(attn_weight, dim=-1)
-    attn_weight = torch.dropout(attn_weight, dropout, train=True)
+    attn_weight = F.softmax(attn_weight, dim=-1)
+    if dropout is not None:
+        attn_weight = F.dropout(attn_weight, dropout, training=True)
     return attn_weight @ value
 
 
@@ -130,8 +133,8 @@ class ScaledDotProductAttention(nn.Module):
 
         attn_weight = torch.softmax(scores, dim=-1)
 
-        cprint(attn_weight.shape)
-        cprint(value.shape)
+        # cprint(attn_weight.shape)
+        # cprint(value.shape)
         context = torch.matmul(attn_weight, value)
         # return context, attn_weight
         return context
@@ -255,22 +258,22 @@ if __name__ == '__main__':
 
         # Calling the attention function
         att = ScaledDotProductAttention()
-        output, attn_weights = att(q, k, v, mask=tril)
+        output = att(q, k, v, mask=tril)
 
         cprint(output.shape)
-        cprint(attn_weights.shape)
-        cprint(attn_weights)
+        # cprint(attn_weights.shape)
+        # cprint(attn_weights)
 
     def test_multihead_attention():
         head_size = 8  # (B, T, C) -> (B, T, head_size)
 
         # Calling the attention function
         att = MultiHeadAttention(d_model=C, num_heads=head_size)
-        output, attn_weights = att(x, x, x)
+        output = att(x, x, x)
 
         cprint(output.shape)
-        cprint(attn_weights.shape)
-        cprint(attn_weights)
+        # cprint(attn_weights.shape)
+        # cprint(attn_weights)
 
     test_scaled_dot_product_attention()
     # test_multihead_attention()
