@@ -58,12 +58,11 @@ class LayerNorm(nn.Module):
         allows the layer to learn an elementwise scale and shift for the normalized output.
         Defaults to True.
         eps (float, optional): A value added to the denominator for numerical stability.
-        Defaults to 1e-5.
         
         gamma (Tensor): The learnable weights of the module of shape equal to
-        normalized_shape if elementwise_affine is True. Otherwise, it is not defined.
+        normalized_shape if elementwise_affine is True.
         beta (Tensor): The learnable bias of the module of shape equal to
-        normalized_shape if elementwise_affine is True. Otherwise, it is not defined.
+        normalized_shape if elementwise_affine is True.
         '''
         if isinstance(normalized_shape, int):
             normalized_shape = torch.Size([normalized_shape])
@@ -81,6 +80,7 @@ class LayerNorm(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         # x = rearrange(x, '... d -> ... d')
+        # assert self.normalized_shape == x.shape[-len(self.normalized_shape):]
         dims = [-(i + 1) for i in range(len(self.normalized_shape))]
         mean = x.mean(dim=dims, keepdim=True)
         # std = x.std(dim=dims, keepdim=True, unbiased=False)
@@ -100,23 +100,19 @@ if __name__ == '__main__':
     #     cprint(x.shape)
 
     def test_LayerNorm():
-        # NLP Example
+        # [1] NLP Example
         batch, sentence_length, embedding_dim = 20, 5, 10
         embedding = torch.randn(batch, sentence_length, embedding_dim)
         # layer_norm = nn.LayerNorm(embedding_dim)
-        layer_norm = LayerNorm(embedding_dim)
+        layer_norm_nlp = LayerNorm(embedding_dim)
+        cprint(layer_norm_nlp(embedding).shape)
 
-        # Activate module
-        layer_norm(embedding)
-        # Image Example
-        N, C, H, W = 20, 5, 10, 10
-        input = torch.randn(N, C, H, W)
+        # [2] CV Example
+        batch, channel, H, W = 20, 5, 10, 10
+        img_batch = torch.randn(batch, channel, H, W)
         # Normalize over the last three dimensions (i.e. the channel and spatial dimensions)
-        # as shown in the image below
-        # layer_norm = nn.LayerNorm([C, H, W])
-        layer_norm = LayerNorm([C, H, W])
-        output = layer_norm(input)
-        cprint(output.shape)
+        layer_norm_cv = LayerNorm(img_batch.shape[1:])
+        cprint(layer_norm_cv(img_batch).shape)
 
     # test_LayerNorm1d()
     test_LayerNorm()
