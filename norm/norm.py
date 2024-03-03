@@ -11,7 +11,6 @@ import torch.nn.functional as F
 
 import sys; from pathlib import Path; sys.path.append(str(Path(__file__).resolve().parent.parent))
 from utils import *
-from utils import *
 from torch import Tensor, Size
 from typing import Optional, Tuple, Union, List
 
@@ -21,8 +20,10 @@ class SimpleLayerNorm1d:
     def __init__(self, dim: int, eps: float = 1e-5):
         """
         dim (int): The number of dimensions in the input tensor.
-        eps (float, optional): A small value added to the denominator for numerical stability. Defaults to 1e-5.
-        momentum (float, optional): The value used for the running mean and variance computation. Defaults to 0.1.
+        eps (float, optional): A small value added to the denominator for numerical stability. 
+        In this implementation, self.gamma and self.beta are initialized as regular tensors 
+        using torch.ones(dim) and torch.zeros(dim), respectively. 
+        As regular tensors, they do not automatically get updated during the training process when using gradient descent methods.
         """
         self.eps = eps
         self.gamma = torch.ones(dim)
@@ -32,10 +33,11 @@ class SimpleLayerNorm1d:
         # since this is 1d, dim=1
         x_mean = x.mean(dim=1, keepdim=True)
         x_var = x.var(dim=1, keepdim=True)
-        x_hat = (x - x_mean) / torch.sqrt(
-            x_var + self.eps)  # norm to unit variance
-        self.out = self.gamma * x_hat + self.beta  # scale and shift
-        return self.out
+
+        # norm to unit variance
+        x = (x - x_mean) / torch.sqrt(x_var + self.eps)  
+        x = self.gamma * x + self.beta  # scale and shift
+        return x 
 
     def parameters(self):
         return [self.gamma, self.beta]
@@ -48,6 +50,21 @@ class LayerNorm(nn.Module):
                  elementwise_affine: bool = True,
                  eps: float = 1e-5):
         super().__init__()
+        '''
+        normalized_shape: The shape of the input tensor that should be normalized. 
+        This specifies the shape of the last dimension(s) of the input tensor to be normalized. 
+        elementwise_affine: If True, this module has learnable per-element
+        affine parameters initialized to ones (for weights) and zeros (for biases). This
+        allows the layer to learn an elementwise scale and shift for the normalized output.
+        Defaults to True.
+        eps (float, optional): A value added to the denominator for numerical stability.
+        Defaults to 1e-5.
+        
+        gamma (Tensor): The learnable weights of the module of shape equal to
+        normalized_shape if elementwise_affine is True. Otherwise, it is not defined.
+        beta (Tensor): The learnable bias of the module of shape equal to
+        normalized_shape if elementwise_affine is True. Otherwise, it is not defined.
+        '''
         if isinstance(normalized_shape, int):
             normalized_shape = torch.Size([normalized_shape])
         elif isinstance(normalized_shape, list):
