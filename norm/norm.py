@@ -9,7 +9,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 # from einops import rearrange
 
-import sys; from pathlib import Path; sys.path.append(str(Path(__file__).resolve().parent.parent))
+import sys
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 from utils import *
 from torch import Tensor, Size
 from typing import Optional, Tuple, Union, List
@@ -35,9 +38,9 @@ class SimpleLayerNorm1d:
         x_var = x.var(dim=1, keepdim=True)
 
         # norm to unit variance
-        x = (x - x_mean) / torch.sqrt(x_var + self.eps)  
+        x = (x - x_mean) / torch.sqrt(x_var + self.eps)
         x = self.gamma * x + self.beta  # scale and shift
-        return x 
+        return x
 
     def parameters(self):
         return [self.gamma, self.beta]
@@ -89,6 +92,55 @@ class LayerNorm(nn.Module):
         if self.elementwise_affine:
             x = x * self.gamma + self.beta
         return x
+
+
+class BatchNorm(nn.Module):
+
+    def __init__(self,
+                 channels: int,
+                 eps: float = 1e-5,
+                 momentum: float = 0.1,
+                 affine: bool = True,
+                 track_running_stats: bool = True):
+        super().__init__()
+        self.channels = channels
+        self.eps = eps
+        self.momentum = momentum
+        self.affine = affine
+        self.track_running_stats = track_running_stats
+        if self.affine:
+            self.gamma = nn.Parameter(torch.ones(channels))
+            self.beta = nn.Parameter(torch.zeros(channels))
+        if self.track_running_stats:
+            self.register_buffer('exp_mean', torch.zeros(channels))
+            self.register_buffer('exp_var', torch.ones(channels))
+
+    def forward(self, x: Tensor) -> Tensor:
+        x_shape = x.shape
+        batch_size = x_shape[0]
+        assert self.channels == x.shape[1]
+        x = x.view(batch_size, self.channels, -1)
+
+        if self.training or not self.track_running_stats:
+            mean = x.mean(dim=[0, 2])
+            mean_x2 = (x**2).mean(dim=[0, 2])
+            var = mean_x2 - mean**2
+            if self.training and self.track_running_stats:
+                self.exp_mean = (
+                    1 - self.momentum) * self.exp_mean + self.momentum * mean
+                self.exp_var = (
+                    1 - self.momentum) * self.exp_var + self.momentum * var
+        else:
+            mean = self.exp_mean
+            var = self.exp_var
+
+        x_norm = (x - mean.view(1, -1, 1)) / torch.sqrt(var + self.eps)
+        x_norm = x_norm.view(1, -1, 1)
+
+        if self.affine:
+            x_norm = self.gamma.view(1, -1, 1) * x_norm + \
+                        self.beta.view(1, -1, 1)
+        return x_norm.view(x_shape)
 
 
 if __name__ == '__main__':
