@@ -1,2 +1,0 @@
-- [ ] autoregressive masking in basic attention
-- [ ] flash attention

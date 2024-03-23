@@ -1,3 +1,7 @@
+'''
+On LayerNorm's location: https://arxiv.org/abs/2002.04745
+'''
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -149,6 +153,57 @@ class BoringDecoderBlock(nn.Module):
         return x
 
 
+class BoringTransformerBlock(nn.Module):
+    '''
+    Act like EncoderBlock or DecoderBlock in a transformer model.
+    Assume the input already padded.
+    '''
+    def __init__(self, d_model, num_heads, d_ff, dropout=0.1):
+        super(BoringDecoderBlock, self).__init__()
+        
+        self.masked_mha = MultiHeadAttention(d_model, num_heads, dropout=dropout)
+        self.dropout1 = nn.Dropout(dropout)
+        self.layer_norm1 = LayerNorm(d_model)
+        
+        self.mha = MultiHeadAttention(d_model, num_heads, dropout=dropout)
+        self.dropout2 = nn.Dropout(dropout)
+        self.layer_norm2 = LayerNorm(d_model)
+        
+        self.feed_forward = nn.Sequential(
+            nn.Linear(d_model, d_ff),
+            nn.ReLU(),
+            nn.Dropout(dropout),
+            nn.Linear(d_ff, d_model)
+        )
+        self.dropout3 = nn.Dropout(dropout)
+        self.layer_norm3 = LayerNorm(d_model)
+    
+    def forward(self, x, enc_output=None, src_mask=None, tgt_mask=None):
+        '''
+        if enc_output is None, then it's an encoder block
+        src_mask for decoder self-attn
+        tgt_mast for encoder-decoder attn
+        '''
+
+        # Masked multi-head self-attn
+        attn_output, _ = self.masked_mha(x, x, x, attn_mask=tgt_mask)
+        attn_output = self.dropout1(attn_output)
+        x = self.layer_norm1(x + attn_output)
+        
+        if enc_output is not None:
+            # Multi-head attn over encoder output: query=x, key=value=enc_output
+            attn_output, _ = self.mha(x, enc_output, enc_output, attn_mask=src_mask)
+            attn_output = self.dropout2(attn_output)
+            x = self.layer_norm2(x + attn_output)
+        
+        # Feed-forward network
+        ff_output = self.feed_forward(x)
+        ff_output = self.dropout3(ff_output)
+        x = self.layer_norm3(x + ff_output)
+        
+        return x
+
+
 class BoringTransformerModel(nn.Module):
     def __init__(self, vocab_size, d_model, num_heads, num_layers, d_ff, max_len, dropout=0.1):
         super(BoringTransformerModel, self).__init__()
@@ -188,3 +243,4 @@ class BoringTransformerModel(nn.Module):
         output = self.linear(dec_output)
         
         return output
+
