@@ -94,7 +94,7 @@ class LayerNorm(nn.Module):
         return x
 
 
-class BatchNorm(nn.Module):
+class BatchNorm2d(nn.Module):
 
     def __init__(self,
                  channels: int,
