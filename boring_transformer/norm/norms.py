@@ -12,8 +12,8 @@ import torch.nn.functional as F
 import sys
 from pathlib import Path
 
-sys.path.append(str(Path(__file__).resolve().parent.parent))
-from utils import *
+from boring_transformer.utils import cprint
+
 from torch import Tensor, Size
 from typing import Optional, Tuple, Union, List
 
@@ -142,29 +142,3 @@ class BatchNorm2d(nn.Module):
                         self.beta.view(1, -1, 1)
         return x_norm.view(x_shape)
 
-
-if __name__ == '__main__':
-
-    # def test_LayerNorm1d():
-    #     module = SimpleLayerNorm1d(100)
-    #     x = torch.randn(32, 100)
-    #     x = module(x)
-    #     cprint(x.shape)
-
-    def test_LayerNorm():
-        # [1] NLP Example
-        batch, sentence_length, embedding_dim = 20, 5, 10
-        embedding = torch.randn(batch, sentence_length, embedding_dim)
-        # layer_norm = nn.LayerNorm(embedding_dim)
-        layer_norm_nlp = LayerNorm(embedding_dim)
-        cprint(layer_norm_nlp(embedding).shape)
-
-        # [2] CV Example
-        batch, channel, H, W = 20, 5, 10, 10
-        img_batch = torch.randn(batch, channel, H, W)
-        # Normalize over the last three dimensions (i.e. the channel and spatial dimensions)
-        layer_norm_cv = LayerNorm(img_batch.shape[1:])
-        cprint(layer_norm_cv(img_batch).shape)
-
-    # test_LayerNorm1d()
-    test_LayerNorm()

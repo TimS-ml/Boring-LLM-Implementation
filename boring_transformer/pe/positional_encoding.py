@@ -5,8 +5,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 # from einops import rearrange
 
-import sys; from pathlib import Path; sys.path.append(str(Path(__file__).resolve().parent.parent))
-from utils import *
+from boring_transformer.utils import cprint
+
 from torch import Tensor
 from typing import Optional, Tuple, Union
 
@@ -88,46 +88,4 @@ class LearnedPositionalEncoding(nn.Module):
         if self.dropout is not None:
             return self.dropout(x)
         return x
-
-
-if __name__ == '__main__':
-    # Generating random inputs
-    B, T, C = 4, 8, 32  # batch size, time steps (seq length), channels
-    x = torch.rand(B, T, C)
-    # x = torch.rand(B, T)
-    tril = torch.tril(torch.ones(T, T))  # for mask
-
-    def test_simple_sinusoidal_positional_encoding():
-        pe = SimpleSinusoidalPositionalEncoding(C, max_len=T)
-
-        assert pe.shape == (T, C)
-        
-        cprint(pe)
-        cprint(pe.shape)
-
-    def test_sinusoidal_positional_encoding():
-        pe = SinusoidalPositionalEncoding(C, dropout=0.1, max_len=T)
-        y = pe(x)
-
-        assert y.shape == x.shape, "Output shape should match input shape."
-        # assert y.sum() >= x.sum(), "Expecting learned positional encoding to increase the sum of elements. Even after Dropout."
-
-        cprint(y)
-        cprint(y.shape)
-        # print(y.sum(), ' ', x.sum())
-    
-    def test_learned_positional_encoding():
-        pe = LearnedPositionalEncoding(C, dropout=0.1, max_len=T)
-        y = pe(x)
-
-        assert y.shape == x.shape, "Output shape should match input shape."
-        # assert y.sum() >= x.sum(), "Expecting learned positional encoding to increase the sum of elements. Even after Dropout."
-
-        cprint(y)
-        cprint(y.shape)
-        # print(y.sum(), ' ', x.sum())
-
-    # test_simple_sinusoidal_positional_encoding()
-    test_sinusoidal_positional_encoding()
-    # test_learned_positional_encoding()
 
