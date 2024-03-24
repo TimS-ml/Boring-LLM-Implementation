@@ -13,9 +13,9 @@ from utils import *
 from torch import Tensor, Size
 from typing import Optional, Tuple, Union, List
 
-from attention.attentions import MultiHeadAttention
-from norm.norm import LayerNorm
-from pe.positional_encoding import SinusoidalPositionalEncoding, LearnedPositionalEncoding
+from boring_transformer.attention import MultiHeadAttention
+from boring_transformer.norm import LayerNorm
+from boring_transformer.pe import SinusoidalPositionalEncoding, LearnedPositionalEncoding
 
 
 class BoringEncoderBlock(nn.Module):
