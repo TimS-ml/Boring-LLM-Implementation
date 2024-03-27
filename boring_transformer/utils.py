@@ -326,19 +326,20 @@ def get_lr(it, learning_rate, warmup_iters, lr_decay_iters, min_lr):
     return min_lr + coeff * (learning_rate - min_lr)
 
 
-def mprint(obj, magic_methods=True, private_methods=True, public_methods=True):
+def mprint(obj, magic_methods=False, private_methods=True, public_methods=True):
     # Split items based on their types
-    if magic_methods:
-        magic_methods = [x for x in dir(obj) if x.startswith("__") and x.endswith("__")]
-        print("\n\033[93mMagic Methods:\033[0m")
-        for item in sorted(magic_methods):
-            print(f"    {item}")
     
     if private_methods:
+        magic_methods = [x for x in dir(obj) if x.startswith("__") and x.endswith("__")]
         private_methods = [x for x in dir(obj) if x.startswith("_") and not x in magic_methods]
         print("\n\033[93mPrivate Methods:\033[0m")
         for item in sorted(private_methods):
             print(f"    {item}")
+
+        if magic_methods:
+            print("\n\033[93mMagic Methods:\033[0m")
+            for item in sorted(magic_methods):
+                print(f"    {item}")
     
     if public_methods:
         public_methods = [x for x in dir(obj) if not x.startswith("_")]
