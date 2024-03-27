@@ -390,12 +390,6 @@ def cprint(*exprs, c=None):
     for arg, expr in zip(arg_list, exprs):
         try:
             value = expr
-            print(f"\033[93m{arg}\033[0m: \n{value}\n")
-        except Exception as e:
-            print(f"Error evaluating {arg}: {e}")
-    for arg, expr in zip(arg_list, exprs):
-        try:
-            value = expr
             if not c:
                 print(YELLOW_PATTERN % f"{arg}:")
                 pprint.pprint(value)
