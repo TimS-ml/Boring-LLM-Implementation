@@ -6,19 +6,40 @@ from tqdm import tqdm
 import numpy as np
 import tiktoken
 from datasets import load_dataset # huggingface datasets
+from datasets import load_dataset
+from huggingface_hub import snapshot_download
+
 
 # number of workers in .map() call
 # good number to use is ~order number of cpu cores // 2
-num_proc = 8
+num_proc = 4
 
 # number of workers in load_dataset() call
 # best number might be different from num_proc above as it also depends on NW speed.
 # it is better than 1 usually though
 num_proc_load_dataset = num_proc
 
+LOCAL = False
+
 if __name__ == '__main__':
     # takes 54GB in huggingface .cache dir, about 8M documents (8,013,769)
-    dataset = load_dataset("openwebtext", num_proc=num_proc_load_dataset)
+
+    if LOCAL:
+        # Set the path where you want to store the downloaded dataset
+        local_dataset_path = "./openweb"
+        
+        # Download the dataset using snapshot_download
+        dataset_repo_id = "Skylion007/openwebtext"
+        dataset_dir = snapshot_download(
+            dataset_repo_id, 
+            repo_type="dataset",
+            local_dir=local_dataset_path, 
+            resume_download=True)
+
+        dataset = load_dataset(dataset_dir, num_proc=num_proc_load_dataset)
+    else:
+        # dataset = load_dataset("openwebtext", num_proc=num_proc_load_dataset)
+        dataset = load_dataset("Skylion007/openwebtext", num_proc=num_proc_load_dataset)
 
     # owt by default only contains the 'train' split, so create a test split
     split_dataset = dataset["train"].train_test_split(test_size=0.0005, seed=2357, shuffle=True)
