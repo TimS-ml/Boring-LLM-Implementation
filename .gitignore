@@ -1,5 +1,26 @@
+.DS_Store
+.idea
+.vscode
+*.bin
+*.pkl
+*.pt
+*.pyc
+input.txt
+
 Quick*.*
 Temp*.*
+
+data/openwebtext/*
+!data/openwebtext/readme.md
+!data/openwebtext/prepare.py
+
+data/shakespeare/*
+!data/shakespeare/readme.md
+!data/shakespeare/prepare.py
+
+data/shakespeare_char/*
+!data/shakespeare_char/readme.md
+!data/shakespeare_char/prepare.py
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

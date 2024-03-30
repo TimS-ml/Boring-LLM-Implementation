@@ -30,3 +30,8 @@ output = att(x, x, x)
 
 cprint(output.shape)
 ```
+
+
+# Demo Data and Preprocessing
+From nanoGPT
+
