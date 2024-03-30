@@ -9,13 +9,13 @@ import torch.nn.functional as F
 # from einops import rearrange
 from torch.nn.utils.rnn import pad_sequence
 
-from utils import *
 from torch import Tensor, Size
 from typing import Optional, Tuple, Union, List
 
 from boring_transformer.attention import MultiHeadAttention
 from boring_transformer.norm import LayerNorm
 from boring_transformer.pe import SinusoidalPositionalEncoding, LearnedPositionalEncoding
+from boring_transformer.utils import cprint
 
 
 class BoringEncoderBlock(nn.Module):
