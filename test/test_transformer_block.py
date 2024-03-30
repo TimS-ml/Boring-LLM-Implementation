@@ -3,16 +3,6 @@ from boring_transformer.utils import cprint
 from boring_transformer.boring_transformer import BoringEncoderBlock
 
 
-B, T, C = 4, 8, 32  # batch size, time steps (seq length), channels
-x = torch.rand(B, T, C)
-
-# Generate a lower triangular matrix for causal masking
-# Then convert the lower triangular matrix to float; positions to attend to are marked as 0, others as -inf
-tril = torch.tril(torch.ones(T, T))
-mask = tril.float().masked_fill(tril == 0, float('-inf'))
-cprint(mask)
-
-
 # Test BoringEncoderBlock
 d_model = 512
 num_heads = 8
