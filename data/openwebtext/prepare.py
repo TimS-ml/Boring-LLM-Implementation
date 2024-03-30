@@ -5,8 +5,7 @@ import os
 from tqdm import tqdm
 import numpy as np
 import tiktoken
-from datasets import load_dataset # huggingface datasets
-from datasets import load_dataset
+from datasets import load_dataset, DownloadConfig
 from huggingface_hub import snapshot_download
 
 
@@ -38,8 +37,9 @@ if __name__ == '__main__':
 
         dataset = load_dataset(dataset_dir, num_proc=num_proc_load_dataset)
     else:
+        dataset = load_dataset("openwebtext", num_proc=num_proc_load_dataset, download_config=DownloadConfig(resume_download=True))
         # dataset = load_dataset("openwebtext", num_proc=num_proc_load_dataset)
-        dataset = load_dataset("Skylion007/openwebtext", num_proc=num_proc_load_dataset)
+        # dataset = load_dataset("Skylion007/openwebtext", num_proc=num_proc_load_dataset)
 
     # owt by default only contains the 'train' split, so create a test split
     split_dataset = dataset["train"].train_test_split(test_size=0.0005, seed=2357, shuffle=True)
