@@ -9,7 +9,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 # from einops import rearrange
 
-from boring_nn.utils import cprint
+from boring_utils.utils import cprint
 
 from torch import Tensor, Size
 from typing import Optional, Tuple, Union, List

@@ -1,5 +1,5 @@
 import torch
-from boring_nn.utils import cprint
+from boring_utils.utils import cprint
 from boring_nn.norm import *
 
 
