@@ -13,7 +13,7 @@ pip install -e .
 # Use
 ```python
 import torch
-from boring_nn.utils import cprint
+from boring_utils.utils import cprint
 from boring_nn.attention import MultiHeadAttention
 
 
@@ -33,7 +33,7 @@ cprint(output.shape)
 
 ```python
 import torch
-from boring_nn.utils import cprint
+from boring_utils.utils import cprint
 from boring_transformer.boring_transformer import BoringEncoderBlock
 
 input_seq = torch.randn(batch_size, max_seq_len, d_model)
