@@ -28,10 +28,10 @@ def test_scaled_dot_product_attention():
 
     # Calling the attention function
     att = ScaledDotProductAttention()
-    output = att(q, k, v, mask=tril)
+    output, wei = att(q, k, v, attn_mask=tril)
 
     cprint(output.shape)
-    # cprint(attn_weights.shape)
+    cprint(wei.shape)
     # cprint(attn_weights)
 
 def test_multihead_attention():
@@ -39,11 +39,10 @@ def test_multihead_attention():
 
     # Calling the attention function
     att = MultiHeadAttention(d_model=C, num_heads=head_size)
-    output = att(x, x, x)
+    output, wei = att(x, x, x)
 
     cprint(output.shape)
-    # cprint(attn_weights.shape)
-    # cprint(attn_weights)
+    cprint(wei.shape)
 
 
 print("test_scaled_dot_product_attention")

@@ -12,6 +12,7 @@ Note:
 - In the Transformer architecture, the dimensionality of keys, queries, and values is typically the same, so...
 - The attention mask is used to selectively ignore or pay less attention to certain elements 
     in the input sequences during the attention calculation.
+- The attention weights in these attention functions have a shape of [batch_size, seq_len (query), seq_len (key)]
 '''
 
 import numpy as np
@@ -83,7 +84,7 @@ def SimpleScaledDotProductAttention(query: Tensor,
     attn_weight = F.softmax(attn_weight, dim=-1)
     if dropout is not None:
         attn_weight = F.dropout(attn_weight, dropout, training=True)
-    return attn_weight @ value
+    return attn_weight @ value, attn_weight
 
 
 class ScaledDotProductAttention(nn.Module):
@@ -112,7 +113,7 @@ class ScaledDotProductAttention(nn.Module):
                 query: Tensor,
                 key: Tensor,
                 value: Tensor,
-                mask: Optional[Tensor] = None) -> Tensor:
+                attn_mask: Optional[Tensor] = None) -> tuple[Tensor, Tensor]:
 
         # calculate the scaling factor
         if self.d_k == 0:
@@ -123,9 +124,9 @@ class ScaledDotProductAttention(nn.Module):
         scores = torch.matmul(query, key.transpose(-2, -1)) * scale_factor
         # cprint(scores.shape)
 
-        if mask is not None:
+        if attn_mask is not None:
             # broadcasted to the shape of scores
-            scores = scores.masked_fill(mask == 0, float("-inf"))
+            scores = scores.masked_fill(attn_mask == 0, float("-inf"))
 
         if self.dropout is not None:
             scores = self.dropout(scores)
@@ -136,7 +137,7 @@ class ScaledDotProductAttention(nn.Module):
         # cprint(value.shape)
         context = torch.matmul(attn_weight, value)
         # return context, attn_weight
-        return context
+        return context, attn_weight
 
 
 class MultiHeadAttention(nn.Module):
@@ -177,11 +178,12 @@ class MultiHeadAttention(nn.Module):
                 query: Tensor,
                 key: Tensor,
                 value: Tensor,
-                mask: Optional[Tensor] = None) -> Tensor:
+                attn_mask: Optional[Tensor] = None) -> tuple[Tensor, Tensor]:
 
         # split d_model (the last dimention) into num_heads * d_head
         # batch_size, seq_len, num_heads, d_head
         batch_size = query.size(0)
+        seq_len = query.size(1)
         query = self.query_proj(query)
         query = query.view(batch_size, -1, self.num_heads, self.d_head)
         key = self.key_proj(key)
@@ -208,15 +210,15 @@ class MultiHeadAttention(nn.Module):
         # key = rearrange(key, 'b k (n d) -> (b n) k d', n=self.num_heads)
         # value = rearrange(value, 'b v (n d) -> (b n) v d', n=self.num_heads)
 
-        if mask is not None:
+        if attn_mask is not None:
             # batch_size, seq_len (Q), seq_len (K) -> batch_size, 1, seq_len (Q), seq_len (K)
-            mask = mask.unsqueeze(1)
+            attn_mask = attn_mask.unsqueeze(1)
 
             # repeat operation duplicates the tensor along specified dimensions
             # batch_size, num_heads, seq_len (Q), seq_len (K)
-            mask = mask.repeat(1, self.num_heads, 1, 1)
+            attn_mask = attn_mask.repeat(1, self.num_heads, 1, 1)
 
-        context = self.scaled_dot_attn(query, key, value, mask)
+        context, attn_weights = self.scaled_dot_attn(query, key, value, attn_mask)
 
         # Reshape the context tensor back to the original form
         # unpack batch_size * num_heads, seq_len, d_head -> batch_size, seq_len, d_model
@@ -227,5 +229,7 @@ class MultiHeadAttention(nn.Module):
         # the Einops way
         # context = rearrange(context, '(b n) v d -> b v (n d)', b=batch_size, n=self.num_heads)
 
-        return context
+        attn_weights = attn_weights.view(batch_size * self.num_heads, seq_len, -1)
+        attn_weights = attn_weights.view(batch_size, self.num_heads, seq_len, -1)
+        return context, attn_weights
 
