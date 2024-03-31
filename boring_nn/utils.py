@@ -380,8 +380,22 @@ def cprint(*exprs, c=None):
     # Extract the arguments from the line
     arg_str = call_line[call_line.index('(') + 1:-1].strip()
     
-    # Split the arguments by comma
-    arg_list = [arg.strip() for arg in arg_str.split(',')]
+    # Split the arguments by comma, keeping expressions intact
+    arg_list = []
+    bracket_count = 0
+    current_arg = []
+    for char in arg_str:
+        if char == ',' and bracket_count == 0:
+            arg_list.append(''.join(current_arg).strip())
+            current_arg = []
+        else:
+            if char in '([{':
+                bracket_count += 1
+            elif char in ')]}':
+                bracket_count -= 1
+            current_arg.append(char)
+    if current_arg:
+        arg_list.append(''.join(current_arg).strip())
     
     # Check if there are any arguments
     if not arg_list or (len(arg_list) == 1 and not arg_list[0]):
@@ -390,25 +404,24 @@ def cprint(*exprs, c=None):
     
     for arg, expr in zip(arg_list, exprs):
         try:
-            value = expr
             if not c:
                 print(YELLOW_PATTERN % f"{arg}:")
-                pprint.pprint(value)
+                pprint.pprint(expr)
             if c == 'red':
                 print(RED_PATTERN % f"{arg}:")
-                pprint.pprint(value)
+                pprint.pprint(expr)
             elif c == 'green':
                 print(GREEN_PATTERN % f"{arg}:")
-                pprint.pprint(value)
+                pprint.pprint(expr)
             elif c == 'blue':
                 print(BLUE_PATTERN % f"{arg}:")
-                pprint.pprint(value)
+                pprint.pprint(expr)
             elif c == 'pep':
                 print(PEP_PATTERN % f"{arg}:")
-                pprint.pprint(value)
+                pprint.pprint(expr)
             elif c == 'brown':
                 print(BROWN_PATTERN % f"{arg}:")
-                pprint.pprint(value)
+                pprint.pprint(expr)
             elif c == 'normal':
                 pprint.pprint(arg)
 

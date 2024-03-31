@@ -122,7 +122,13 @@ class ScaledDotProductAttention(nn.Module):
             scale_factor = 1 / np.sqrt(self.d_k)
 
         scores = torch.matmul(query, key.transpose(-2, -1)) * scale_factor
-        # cprint(scores.shape)
+
+        if attn_mask is not None:
+            cprint("ScaledDotProductAttention")
+            cprint(query.shape)
+            cprint(key.shape)
+            cprint(scores.shape)
+            cprint(attn_mask.shape)
 
         if attn_mask is not None:
             # broadcasted to the shape of scores
