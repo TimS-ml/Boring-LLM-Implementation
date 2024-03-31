@@ -1,5 +1,5 @@
 import torch
-from boring_transformer.utils import cprint
+from boring_nn.utils import cprint
 from boring_transformer.boring_transformer import BoringEncoderBlock
 
 

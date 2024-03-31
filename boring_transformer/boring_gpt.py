@@ -1,8 +1,8 @@
 import torch
 import torch.nn as nn
-from boring_transformer.attention import MultiHeadAttention
-from boring_transformer.norm import LayerNorm
-from boring_transformer.pe import LearnedPositionalEncoding
+from broing_nn.attention import MultiHeadAttention
+from broing_nn.norm import LayerNorm
+from broing_nn.pe import LearnedPositionalEncoding
 
 
 class BoringGPTBlock(nn.Module):

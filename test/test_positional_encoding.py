@@ -1,6 +1,6 @@
 import torch
-from boring_transformer.utils import cprint
-from boring_transformer.pe import *
+from boring_nn.utils import cprint
+from boring_nn.pe import *
 
 
 # Generating random inputs

@@ -1,6 +1,6 @@
 import torch
-from boring_transformer.utils import cprint
-from boring_transformer.attention import *
+from boring_nn.utils import cprint
+from boring_nn.attention import *
 
 
 B, T, C = 4, 8, 32  # batch size, time steps (seq length), channels

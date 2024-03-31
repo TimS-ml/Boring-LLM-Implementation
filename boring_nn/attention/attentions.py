@@ -20,7 +20,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 # from einops import rearrange
 
-from boring_transformer.utils import cprint
+from boring_nn.utils import cprint
 
 from torch import Tensor
 from typing import Optional, Tuple, Union
