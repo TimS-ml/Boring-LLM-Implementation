@@ -12,10 +12,10 @@ from torch.nn.utils.rnn import pad_sequence
 from torch import Tensor, Size
 from typing import Optional, Tuple, Union, List
 
-from broing_nn.attention import MultiHeadAttention
-from broing_nn.norm import LayerNorm
-from broing_nn.pe import SinusoidalPositionalEncoding, LearnedPositionalEncoding
-from broing_nn.utils import cprint
+from boring_nn.attention import MultiHeadAttention
+from boring_nn.norm import LayerNorm
+from boring_nn.pe import SinusoidalPositionalEncoding, LearnedPositionalEncoding
+from boring_nn.utils import cprint
 
 
 class BoringEncoderBlock(nn.Module):
