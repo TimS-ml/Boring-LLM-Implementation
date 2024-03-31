@@ -48,6 +48,8 @@ class BoringEncoderBlock(nn.Module):
         attn_mask:    (batch_size * num_heads, max_sequence_length, max_sequence_length)
         '''
         # Multi-head self-attn
+        # print('=' * 40)
+        # cprint('MHA self-attn', c='normal')
         attn_output, _ = self.mha(x, x, x, attn_mask=mask)
 
         attn_output = self.dropout1(attn_output)
@@ -93,14 +95,17 @@ class BoringDecoderBlock(nn.Module):
         tgt_mast for encoder-decoder attn
         '''
         # Masked multi-head self-attn
+        print('=' * 40)
+        cprint('tgt_mask MHA self-attn', c='normal')
         attn_output, _ = self.masked_mha(x, x, x, attn_mask=tgt_mask)
         attn_output = self.dropout1(attn_output)
         x = self.layer_norm1(x + attn_output)
         
         # Multi-head attn over encoder output: query=x, key=value=enc_output
+        print('=' * 40)
+        cprint('src_mask MHA encoder-decoder attn', c='normal')
         attn_output, _ = self.mha(x, enc_output, enc_output, attn_mask=src_mask)
         attn_output = self.dropout2(attn_output)
-
         x = self.layer_norm2(x + attn_output)
         
         # Feed-forward network
@@ -111,6 +116,7 @@ class BoringDecoderBlock(nn.Module):
         return x
 
 
+# TODO: update this
 class BoringTransformerBlock(nn.Module):
     '''
     Act like EncoderBlock or DecoderBlock in a transformer model.
@@ -144,12 +150,14 @@ class BoringTransformerBlock(nn.Module):
         '''
 
         # Masked multi-head self-attn
+        # cprint('Masked multi-head self-attn', c='normal')
         attn_output, _ = self.masked_mha(x, x, x, attn_mask=tgt_mask)
         attn_output = self.dropout1(attn_output)
         x = self.layer_norm1(x + attn_output)
         
         if enc_output is not None:
             # Multi-head attn over encoder output: query=x, key=value=enc_output
+            # cprint('Multi-head attn over encoder output', c='normal')
             attn_output, _ = self.mha(x, enc_output, enc_output, attn_mask=src_mask)
             attn_output = self.dropout2(attn_output)
             x = self.layer_norm2(x + attn_output)

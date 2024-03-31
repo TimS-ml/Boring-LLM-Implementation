@@ -6,6 +6,7 @@
 *.pt
 *.pyc
 input.txt
+replace.sh
 
 Quick*.*
 Temp*.*

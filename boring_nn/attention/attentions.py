@@ -33,7 +33,7 @@ def SimpleScaledDotProductAttention(query: Tensor,
                                     dropout: Optional[float] = None,
                                     attn_mask: Optional[Tensor] = None,
                                     is_causal: bool = False,
-                                    d_k: int = 0) -> Tensor:
+                                    d_k: int = 0) -> tuple[Tensor, Tensor]:
     '''
     Scaled Dot-Product Attention
 
@@ -127,13 +127,11 @@ class ScaledDotProductAttention(nn.Module):
             cprint("Attention Mask for ScaledDotProductAttention", c='normal')
             # cprint(query.shape)
             # cprint(key.shape)
-            # cprint(scores.shape)
+            cprint(scores.shape)
             cprint(attn_mask.shape)
 
         if attn_mask is not None:
             # broadcasted to the shape of scores
-            scores = scores.masked_fill(attn_mask.unsqueeze(0), float("-inf"))
-            cprint(scores.shape)
             scores = scores.masked_fill(attn_mask == 0, float("-inf"))
 
         if self.dropout is not None:
