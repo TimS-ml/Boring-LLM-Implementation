@@ -16,7 +16,7 @@ from typing import Optional, Tuple, Union, List
 from boring_nn.attention import MultiHeadAttention
 from boring_nn.norm import LayerNorm
 from boring_nn.pe import SinusoidalPositionalEncoding, LearnedPositionalEncoding
-from boring_nn.utils import cprint
+from boring_utils.utils import cprint
 
 
 class BoringEncoderBlock(nn.Module):
