@@ -124,14 +124,16 @@ class ScaledDotProductAttention(nn.Module):
         scores = torch.matmul(query, key.transpose(-2, -1)) * scale_factor
 
         if attn_mask is not None:
-            cprint("ScaledDotProductAttention")
-            cprint(query.shape)
-            cprint(key.shape)
-            cprint(scores.shape)
+            cprint("Attention Mask for ScaledDotProductAttention", c='normal')
+            # cprint(query.shape)
+            # cprint(key.shape)
+            # cprint(scores.shape)
             cprint(attn_mask.shape)
 
         if attn_mask is not None:
             # broadcasted to the shape of scores
+            scores = scores.masked_fill(attn_mask.unsqueeze(0), float("-inf"))
+            cprint(scores.shape)
             scores = scores.masked_fill(attn_mask == 0, float("-inf"))
 
         if self.dropout is not None:

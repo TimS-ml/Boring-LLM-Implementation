@@ -9,7 +9,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 # from einops import rearrange
-from torch.nn.utils.rnn import pad_sequence
 
 from torch import Tensor, Size
 from typing import Optional, Tuple, Union, List
@@ -44,11 +43,9 @@ class BoringEncoderBlock(nn.Module):
     
     def forward(self, x, mask=None):
         '''
-        When padding:
-          x: list of sequences, with different lengths (seq_len_i, d_model)
-          padded_x:     (batch_size, max_sequence_length, d_model)
-          padding_mask: (batch_size, max_sequence_length)
-          attn_mask:    (batch_size * num_heads, max_sequence_length, max_sequence_length)
+        padded_x:     (batch_size, max_sequence_length, d_model)
+        padding_mask: (batch_size, max_sequence_length)
+        attn_mask:    (batch_size * num_heads, max_sequence_length, max_sequence_length)
         '''
         # Multi-head self-attn
         attn_output, _ = self.mha(x, x, x, attn_mask=mask)
