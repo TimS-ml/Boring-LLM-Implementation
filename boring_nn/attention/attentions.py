@@ -22,6 +22,7 @@ import torch.nn.functional as F
 # from einops import rearrange
 
 from boring_utils.utils import cprint
+from boring_utils.helpers import DEBUG
 
 from torch import Tensor
 from typing import Optional, Tuple, Union
@@ -64,6 +65,8 @@ def SimpleScaledDotProductAttention(query: Tensor,
     # match the shape of query @ key.transpose(-2, -1)
     query_len, key_len = query.size(-2), key.size(-2)
     attn_bias = torch.zeros(query_len, key_len, dtype=query.dtype)
+    if DEBUG >= 1:
+        cprint(query.shape, key.shape, attn_bias.shape)
 
     # Generate a lower triangular matrix for causal masking
     if is_causal:
@@ -92,10 +95,10 @@ class ScaledDotProductAttention(nn.Module):
     Scaled Dot-Product Attention, does not contain learnable parameters.
 
     input:
-      [batch_size, seq_len, d_model] or [batch_size, d_model]
+      [batch_size, seq_len, d_model]
 
     score shape:
-      [batch_size, seq_len, seq_len] or [batch_size, seq_len]
+      [batch_size, seq_len, seq_len]
 
     d_k is related to the scaling factor, which is the square root of the dimension of the key vectors
     '''
@@ -113,7 +116,8 @@ class ScaledDotProductAttention(nn.Module):
                 query: Tensor,
                 key: Tensor,
                 value: Tensor,
-                attn_mask: Optional[Tensor] = None) -> tuple[Tensor, Tensor]:
+                attn_mask: Optional[Tensor] = None
+        ) -> tuple[Tensor, Tensor]:
 
         # calculate the scaling factor
         if self.d_k == 0:
@@ -121,31 +125,29 @@ class ScaledDotProductAttention(nn.Module):
         else:
             scale_factor = 1 / np.sqrt(self.d_k)
 
-        scores = torch.matmul(query, key.transpose(-2, -1)) * scale_factor
+        # match the shape of query @ key.transpose(-2, -1)
+        attn_weight = query @ key.transpose(-2, -1) * scale_factor
 
         if attn_mask is not None:
-            cprint("Attention Mask for ScaledDotProductAttention", c='normal')
-            # cprint(query.shape)
-            # cprint(key.shape)
-            cprint(scores.shape)
-            cprint(attn_mask.shape)
+            if DEBUG >= 1:
+                cprint(query.shape)
+                cprint(key.shape)
+                cprint(attn_mask.shape)
+            if attn_mask.dtype == torch.bool:
+                attn_weight.masked_fill_(attn_mask.logical_not(), float("-inf"))
+            else:
+                attn_weight += attn_mask
 
-        if attn_mask is not None:
-            # broadcasted to the shape of scores
-            scores = scores.masked_fill(attn_mask == 0, float("-inf"))
-
+        if DEBUG >= 1:
+            cprint(attn_weight.shape)
+        attn_weight = F.softmax(attn_weight, dim=-1)
         if self.dropout is not None:
-            scores = self.dropout(scores)
-
-        attn_weight = torch.softmax(scores, dim=-1)
-
-        # cprint(attn_weight.shape)
-        # cprint(value.shape)
-        context = torch.matmul(attn_weight, value)
-        # return context, attn_weight
-        return context, attn_weight
+            attn_weight = self.dropout(attn_weight)
+        return attn_weight @ value, attn_weight
 
 
+# TODO: read pytorch source code
+# Need self-attention MHA + encode-decode attention MHA
 class MultiHeadAttention(nn.Module):
     '''
     Multi-Head Attention
@@ -190,6 +192,8 @@ class MultiHeadAttention(nn.Module):
         # batch_size, seq_len, num_heads, d_head
         batch_size = query.size(0)
         seq_len = query.size(1)
+        query_len, key_len, value_len = query.size(1), key.size(1), value.size(1)
+
         query = self.query_proj(query)
         query = query.view(batch_size, -1, self.num_heads, self.d_head)
         key = self.key_proj(key)
@@ -217,12 +221,15 @@ class MultiHeadAttention(nn.Module):
         # value = rearrange(value, 'b v (n d) -> (b n) v d', n=self.num_heads)
 
         if attn_mask is not None:
+            # Reshape the attention mask to match the shape of the attention weights
             # batch_size, seq_len (Q), seq_len (K) -> batch_size, 1, seq_len (Q), seq_len (K)
-            attn_mask = attn_mask.unsqueeze(1)
+            attn_mask = attn_mask.view(batch_size, 1, seq_len, seq_len)
 
-            # repeat operation duplicates the tensor along specified dimensions
             # batch_size, num_heads, seq_len (Q), seq_len (K)
-            attn_mask = attn_mask.repeat(1, self.num_heads, 1, 1)
+            attn_mask = attn_mask.expand(batch_size, self.num_heads, seq_len, seq_len)
+
+            # Flatten the attention mask to match the shape of the attention weights
+            attn_mask = attn_mask.reshape(batch_size * self.num_heads, seq_len, seq_len)
 
         context, attn_weights = self.scaled_dot_attn(query, key, value, attn_mask)
 

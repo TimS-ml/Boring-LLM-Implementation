@@ -24,11 +24,17 @@ def encoder_block_with_mask():
     # Pad the sequences to the maximum sequence length
     padded_input_seqs = pad_sequence(input_seqs, batch_first=True)
 
-    # Create the padding mask
-    padding_mask = torch.tensor([[0] * seq_len[i] + [1] * (max_seq_len - seq_len[i]) for i in range(batch_size)])
+    # Create attention mask
+    attn_mask = torch.zeros(batch_size, max_seq_len, max_seq_len)
+    for i in range(batch_size):
+        attn_mask[i, :seq_len[i], :seq_len[i]] = 1
 
-    # Pass the padded input sequences and padding mask to the encoder block
-    output_seq = encoder_block(padded_input_seqs, mask=padding_mask)
+    # Convert attention mask to boolean tensor
+    attn_mask = attn_mask.bool()
+    cprint(attn_mask.shape)
+
+    # Pass the padded input sequences and attention mask through the encoder block
+    output_seq = encoder_block(padded_input_seqs, attn_mask)
 
     cprint(output_seq.shape == (batch_size, max_seq_len, d_model))
     cprint(output_seq.shape)
