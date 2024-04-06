@@ -11,6 +11,7 @@ import torch.nn.functional as F
 # from einops import rearrange
 
 from boring_utils.utils import cprint
+from boring_utils.helpers import DEBUG
 
 from torch import Tensor
 from typing import Optional, Tuple, Union
@@ -33,8 +34,8 @@ class FeedForward(nn.Module):
                  bias2: bool = True,
                  bias_gate: bool = True):
         super().__init__()
-        self.ln1 = nn.Linear(d_model, d_ff, bias=bias1)
-        self.ln2 = nn.Linear(d_ff, d_model, bias=bias2)
+        self.linear1 = nn.Linear(d_model, d_ff, bias=bias1)
+        self.linear2 = nn.Linear(d_ff, d_model, bias=bias2)
         self.dropout = nn.Dropout(dropout)
         self.activation = activation
         self.is_gated = is_gated
@@ -43,8 +44,12 @@ class FeedForward(nn.Module):
             # be multiplied by the gate, parameterized by weight $V$ and bias $c$
             self.linear_v = nn.Linear(d_model, d_ff, bias=bias_gate)
 
+        if DEBUG >= 1:
+            print('=' * 10 + 'FFN' + '=' * 10)
+            cprint(self.is_gated, self.activation)
+
     def forward(self, x: Tensor) -> Tensor:
-        g = self.activation(self.ln1(x))
+        g = self.activation(self.linear1(x))
 
         if self.is_gated:
             x = g * self.linear_v(x)
@@ -52,6 +57,6 @@ class FeedForward(nn.Module):
             x = g
 
         x = self.dropout(x)
-        x = self.ln2(x)
+        x = self.linear2(x)
         return x
 

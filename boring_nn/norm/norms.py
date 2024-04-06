@@ -10,6 +10,7 @@ import torch.nn.functional as F
 # from einops import rearrange
 
 from boring_utils.utils import cprint
+from boring_utils.helpers import DEBUG
 
 from torch import Tensor, Size
 from typing import Optional, Tuple, Union, List
@@ -77,6 +78,10 @@ class LayerNorm(nn.Module):
         if self.elementwise_affine:
             self.gamma = nn.Parameter(torch.ones(normalized_shape))
             self.beta = nn.Parameter(torch.zeros(normalized_shape))
+
+        if DEBUG >= 1:
+            print('=' * 10 + 'LN' + '=' * 10)
+            cprint(self.normalized_shape, self.elementwise_affine)
 
     def forward(self, x: Tensor) -> Tensor:
         # x = rearrange(x, '... d -> ... d')
