@@ -6,6 +6,7 @@ import torch.nn.functional as F
 # from einops import rearrange
 
 from boring_utils.utils import cprint
+from boring_utils.helpers import DEBUG
 
 from torch import Tensor
 from typing import Optional, Tuple, Union
@@ -53,7 +54,7 @@ class SinusoidalPositionalEncoding(nn.Module):
         self.pe[:, :, 0::2] = torch.sin(pos * div_term)
         self.pe[:, :, 1::2] = torch.cos(pos * div_term)
 
-    def forward(self, x: Tensor):
+    def forward(self, x: Tensor) -> Tensor:
         x = x + self.pe[:, :x.shape[1], :].to(x.device)
 
         # [batch size, time steps (seq length), channels]
@@ -79,7 +80,7 @@ class LearnedPositionalEncoding(nn.Module):
         self.pe = nn.Embedding(max_len, num_hiddens)
         self.num_hiddens = num_hiddens
 
-    def forward(self, x: Tensor):
+    def forward(self, x: Tensor) -> Tensor:
         # B, T = x.shape, where B is batch size and T is sequence length (block size)
         pos = torch.arange(x.shape[1], device=x.device).expand(x.shape[0], x.shape[1])
         x = x + self.pe(pos)

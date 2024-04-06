@@ -16,6 +16,7 @@ from typing import Optional, Tuple, Union, List
 from boring_nn.attention import MultiHeadAttention
 from boring_nn.norm import LayerNorm
 from boring_nn.pe import SinusoidalPositionalEncoding, LearnedPositionalEncoding
+from boring_nn.ffn import FeedForward
 from boring_utils.utils import cprint
 from boring_utils.helpers import DEBUG
 
@@ -33,12 +34,14 @@ class BoringEncoderBlock(nn.Module):
         self.dropout1 = nn.Dropout(dropout)
         self.layer_norm1 = LayerNorm(d_model)
         
-        self.feed_forward = nn.Sequential(
-            nn.Linear(d_model, d_ff),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(d_ff, d_model)
-        )
+        # self.feed_forward = nn.Sequential(
+        #     nn.Linear(d_model, d_ff),
+        #     nn.ReLU(),
+        #     nn.Dropout(dropout),
+        #     nn.Linear(d_ff, d_model)
+        # )
+        self.feed_forward = FeedForward(d_model, d_ff, dropout=dropout)
+
         self.dropout2 = nn.Dropout(dropout)
         self.layer_norm2 = nn.LayerNorm(d_model)
     
@@ -50,8 +53,8 @@ class BoringEncoderBlock(nn.Module):
         '''
         # Multi-head self-attn
         if DEBUG >= 1:
-            print('=' * 40)
-            cprint('MHA self-attn', c='normal')
+            print('=' * 20 + 'MHA self-attn' + '=' * 20)
+
         attn_output, _ = self.mha(x, x, x, attn_mask=mask)
 
         attn_output = self.dropout1(attn_output)
@@ -82,12 +85,14 @@ class BoringDecoderBlock(nn.Module):
         self.dropout2 = nn.Dropout(dropout)
         self.layer_norm2 = LayerNorm(d_model)
         
-        self.feed_forward = nn.Sequential(
-            nn.Linear(d_model, d_ff),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(d_ff, d_model)
-        )
+        # self.feed_forward = nn.Sequential(
+        #     nn.Linear(d_model, d_ff),
+        #     nn.ReLU(),
+        #     nn.Dropout(dropout),
+        #     nn.Linear(d_ff, d_model)
+        # )
+        self.feed_forward = FeedForward(d_model, d_ff, dropout=dropout)
+
         self.dropout3 = nn.Dropout(dropout)
         self.layer_norm3 = LayerNorm(d_model)
     
@@ -98,16 +103,14 @@ class BoringDecoderBlock(nn.Module):
         '''
         # Masked multi-head self-attn
         if DEBUG >= 1:
-            print('=' * 40)
-            cprint('tgt_mask MHA self-attn', c='normal')
+            print('=' * 20 + 'tgt_mask MHA self-attn' + '=' * 20)
         attn_output, _ = self.masked_mha(x, x, x, attn_mask=tgt_mask)
         attn_output = self.dropout1(attn_output)
         x = self.layer_norm1(x + attn_output)
         
         # Multi-head attn over encoder output: query=x, key=value=enc_output
         if DEBUG >= 1:
-            print('=' * 40)
-            cprint('src_mask MHA encoder-decoder attn', c='normal')
+            print('=' * 20 + 'src_mask MHA encoder-decoder attn' + '=' * 20)
         attn_output, _ = self.mha(x, enc_output, enc_output, attn_mask=src_mask)
         attn_output = self.dropout2(attn_output)
         x = self.layer_norm2(x + attn_output)
@@ -120,7 +123,6 @@ class BoringDecoderBlock(nn.Module):
         return x
 
 
-# TODO: update this
 class BoringTransformerBlock(nn.Module):
     '''
     Act like EncoderBlock or DecoderBlock in a transformer model.
@@ -137,12 +139,14 @@ class BoringTransformerBlock(nn.Module):
         self.dropout2 = nn.Dropout(dropout)
         self.layer_norm2 = LayerNorm(d_model)
         
-        self.feed_forward = nn.Sequential(
-            nn.Linear(d_model, d_ff),
-            nn.ReLU(),
-            nn.Dropout(dropout),
-            nn.Linear(d_ff, d_model)
-        )
+        # self.feed_forward = nn.Sequential(
+        #     nn.Linear(d_model, d_ff),
+        #     nn.ReLU(),
+        #     nn.Dropout(dropout),
+        #     nn.Linear(d_ff, d_model)
+        # )
+        self.feed_forward = FeedForward(d_model, d_ff, dropout=dropout)
+
         self.dropout3 = nn.Dropout(dropout)
         self.layer_norm3 = LayerNorm(d_model)
     
@@ -154,14 +158,16 @@ class BoringTransformerBlock(nn.Module):
         '''
 
         # Masked multi-head self-attn
-        # cprint('Masked multi-head self-attn', c='normal')
+        if DEBUG >= 1:
+            print('=' * 20 + 'tgt_mask MHA self-attn' + '=' * 20)
         attn_output, _ = self.masked_mha(x, x, x, attn_mask=tgt_mask)
         attn_output = self.dropout1(attn_output)
         x = self.layer_norm1(x + attn_output)
         
         if enc_output is not None:
             # Multi-head attn over encoder output: query=x, key=value=enc_output
-            # cprint('Multi-head attn over encoder output', c='normal')
+            if DEBUG >= 1:
+                print('=' * 20 + 'src_mask MHA encoder-decoder attn' + '=' * 20)
             attn_output, _ = self.mha(x, enc_output, enc_output, attn_mask=src_mask)
             attn_output = self.dropout2(attn_output)
             x = self.layer_norm2(x + attn_output)
