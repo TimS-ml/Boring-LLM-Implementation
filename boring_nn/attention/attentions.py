@@ -4,6 +4,8 @@ Multi-head attention
   - sec 3.2
 
 - https://pytorch.org/docs/stable/generated/torch.nn.functional.scaled_dot_product_attention.html
+- https://pytorch.org/docs/master/_modules/torch/nn/modules/activation.html#MultiheadAttention
+  - "use_separate_proj_weight=True" when different q k v
 - https://nn.labml.ai/transformers/mha.html
 - https://github.com/sooftware/attentions/blob/master/attentions.py
 - https://github.com/xmu-xiaoma666/External-Attention-pytorch/blob/master/model/attention/SelfAttention.py
@@ -25,7 +27,7 @@ from boring_utils.utils import cprint
 from boring_utils.helpers import DEBUG
 
 from torch import Tensor
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple, Union, List
 
 
 def SimpleScaledDotProductAttention(query: Tensor,
@@ -66,6 +68,7 @@ def SimpleScaledDotProductAttention(query: Tensor,
     query_len, key_len = query.size(-2), key.size(-2)
     attn_bias = torch.zeros(query_len, key_len, dtype=query.dtype)
     if DEBUG >= 1:
+        print('=' * 10 + 'ScaledDotProductAttention' + '=' * 10)
         cprint(query.shape, key.shape, attn_bias.shape)
 
     # Generate a lower triangular matrix for causal masking
@@ -129,6 +132,7 @@ class ScaledDotProductAttention(nn.Module):
         attn_weight = query @ key.transpose(-2, -1) * scale_factor
 
         if attn_mask is not None:
+            print('=' * 10 + 'ScaledDotProductAttention' + '=' * 10)
             if DEBUG >= 1:
                 cprint(query.shape)
                 cprint(key.shape)
@@ -146,8 +150,7 @@ class ScaledDotProductAttention(nn.Module):
         return attn_weight @ value, attn_weight
 
 
-# TODO: read pytorch source code
-# Need self-attention MHA + encode-decode attention MHA
+# need d_k?
 class MultiHeadAttention(nn.Module):
     '''
     Multi-Head Attention
@@ -164,13 +167,10 @@ class MultiHeadAttention(nn.Module):
     def __init__(self,
                  d_model: int = 512,
                  num_heads: int = 8,
-                 dropout: Optional[float] = None):
+                 dropout: Optional[float] = None,
+                 bias: Optional[bool] = False
+                 ):
         super().__init__()
-        # if dropout is not None:
-        #     self.dropout = nn.Dropout(dropout)
-        # else:
-        #     self.dropout = None
-
         assert d_model % num_heads == 0, "d_model % num_heads should be zero."
 
         self.num_heads = num_heads
@@ -178,9 +178,65 @@ class MultiHeadAttention(nn.Module):
         self.scaled_dot_attn = ScaledDotProductAttention(self.d_head, dropout)
 
         # usually d_model == d_head * num_heads, some times it's also written as nn.Linear(d_model, d_model)
-        self.query_proj = nn.Linear(d_model, self.d_head * num_heads)
-        self.key_proj = nn.Linear(d_model, self.d_head * num_heads)
-        self.value_proj = nn.Linear(d_model, self.d_head * num_heads)
+        self.query_proj = nn.Linear(d_model, self.d_head * num_heads, bias=bias)
+        self.key_proj = nn.Linear(d_model, self.d_head * num_heads, bias=bias)
+        self.value_proj = nn.Linear(d_model, self.d_head * num_heads, bias=bias)
+
+        if dropout is not None:
+            self.dropout = nn.Dropout(dropout)
+        else:
+            self.dropout = None
+    
+    def transpose_qkv(self, x):
+        '''
+        input: 
+          [batch_size, seq_len, d_model]
+        output:
+          [batch_size * num_heads, seq_len, d_head], d_head = int(d_model / num_heads)
+
+        because in ScaledDotProductAttention we only care about the last two dims
+
+        # the Einops way
+        # Reshape and permute the dimensions using Einops rearrange
+        query = rearrange(query, 'b q (n d) -> (b n) q d', n=self.num_heads)
+        key = rearrange(key, 'b k (n d) -> (b n) k d', n=self.num_heads)
+        value = rearrange(value, 'b v (n d) -> (b n) v d', n=self.num_heads)
+        '''
+        x = x.reshape(x.shape[0], x.shape[1], self.num_heads, self.d_head)
+        x = x.permute(0, 2, 1, 3)
+        return x.reshape(-1, x.shape[2], x.shape[3])
+
+    def transpose_output(self, x):
+        '''
+        reverse transpose_qkv
+        '''
+        x = x.reshape(-1, self.num_heads, x.shape[1], x.shape[2])
+        x = x.permute(0, 2, 1, 3)
+        return x.reshape(x.shape[0], x.shape[1], -1)
+
+    def prepare_mask(self, attn_mask: Optional[Tensor], query_len: int, key_len: int, batch_size: int) -> Optional[Tensor]:
+        if attn_mask is None:
+            return None
+
+        if attn_mask.dim() == 2:
+            correct_2d_size = (query_len, key_len)
+            if attn_mask.shape != correct_2d_size:
+                raise RuntimeError(f"The shape of the 2D attention mask is {attn_mask.shape}, but should be {correct_2d_size}.")
+            attn_mask = attn_mask.unsqueeze(0)
+        elif attn_mask.dim() == 3:
+            correct_3d_size = (attn_mask.size(0), query_len, key_len)
+            if attn_mask.shape != correct_3d_size:
+                raise RuntimeError(f"The shape of the 3D attention mask is {attn_mask.shape}, but should be {correct_3d_size}.")
+        else:
+            raise RuntimeError(f"attn_mask's dimension {attn_mask.dim()} is not supported")
+
+        # expand the attention mask to match the shape of the attention weights
+        # attn_mask = attn_mask.unsqueeze(1).expand(-1, self.num_heads, -1, -1)
+        # attn_mask = attn_mask.reshape(-1, query_len, key_len)
+        attn_mask = attn_mask.unsqueeze(1).expand(batch_size, self.num_heads, -1, -1)
+        attn_mask = attn_mask.reshape(batch_size * self.num_heads, query_len, key_len)
+
+        return attn_mask
 
     def forward(self,
                 query: Tensor,
@@ -191,58 +247,28 @@ class MultiHeadAttention(nn.Module):
         # split d_model (the last dimention) into num_heads * d_head
         # batch_size, seq_len, num_heads, d_head
         batch_size = query.size(0)
-        seq_len = query.size(1)
-        query_len, key_len, value_len = query.size(1), key.size(1), value.size(1)
+        query_len, key_len = query.size(1), key.size(1)
+
+        if DEBUG >= 1:
+            print('=' * 10 + 'MHA' + '=' * 10)
+            cprint(query.shape)
+            cprint(key.shape)
+            if attn_mask is not None:
+                cprint(attn_mask.shape)
 
         query = self.query_proj(query)
-        query = query.view(batch_size, -1, self.num_heads, self.d_head)
+        query = self.transpose_qkv(query)
         key = self.key_proj(key)
-        key = key.view(batch_size, -1, self.num_heads, self.d_head)
+        key = self.transpose_qkv(key)
         value = self.value_proj(value)
-        value = value.view(batch_size, -1, self.num_heads, self.d_head)
+        value = self.transpose_qkv(value)
 
-        # permute the dimensions into batch_size * num_heads, seq_len, d_head
-        # because in ScaledDotProductAttention we only care about the last two dims
-        query = query.permute(2, 0, 1, 3).contiguous()
-        query = query.view(batch_size * self.num_heads, -1, self.d_head)
-        key = key.permute(2, 0, 1, 3).contiguous()
-        key = key.view(batch_size * self.num_heads, -1, self.d_head)
-        value = value.permute(2, 0, 1, 3).contiguous()
-        value = value.view(batch_size * self.num_heads, -1, self.d_head)
-
-        # the Einops way
-        # query = self.query_proj(query)
-        # key = self.key_proj(key)
-        # value = self.value_proj(value)
-
-        # # Reshape and permute the dimensions using Einops rearrange
-        # query = rearrange(query, 'b q (n d) -> (b n) q d', n=self.num_heads)
-        # key = rearrange(key, 'b k (n d) -> (b n) k d', n=self.num_heads)
-        # value = rearrange(value, 'b v (n d) -> (b n) v d', n=self.num_heads)
-
-        if attn_mask is not None:
-            # Reshape the attention mask to match the shape of the attention weights
-            # batch_size, seq_len (Q), seq_len (K) -> batch_size, 1, seq_len (Q), seq_len (K)
-            attn_mask = attn_mask.view(batch_size, 1, seq_len, seq_len)
-
-            # batch_size, num_heads, seq_len (Q), seq_len (K)
-            attn_mask = attn_mask.expand(batch_size, self.num_heads, seq_len, seq_len)
-
-            # Flatten the attention mask to match the shape of the attention weights
-            attn_mask = attn_mask.reshape(batch_size * self.num_heads, seq_len, seq_len)
+        attn_mask = self.prepare_mask(attn_mask, query_len, key_len, batch_size)
 
         context, attn_weights = self.scaled_dot_attn(query, key, value, attn_mask)
 
-        # Reshape the context tensor back to the original form
-        # unpack batch_size * num_heads, seq_len, d_head -> batch_size, seq_len, d_model
-        context = context.view(self.num_heads, batch_size, -1, self.d_head)
-        context = context.permute(1, 2, 0, 3).contiguous().view(
-            batch_size, -1, self.num_heads * self.d_head)
+        context = self.transpose_output(context)
+        attn_weights = attn_weights.view(batch_size, self.num_heads, query_len, key_len)
 
-        # the Einops way
-        # context = rearrange(context, '(b n) v d -> b v (n d)', b=batch_size, n=self.num_heads)
-
-        attn_weights = attn_weights.view(batch_size * self.num_heads, seq_len, -1)
-        attn_weights = attn_weights.view(batch_size, self.num_heads, seq_len, -1)
         return context, attn_weights
 

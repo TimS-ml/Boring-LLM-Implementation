@@ -17,6 +17,7 @@ from boring_nn.attention import MultiHeadAttention
 from boring_nn.norm import LayerNorm
 from boring_nn.pe import SinusoidalPositionalEncoding, LearnedPositionalEncoding
 from boring_utils.utils import cprint
+from boring_utils.helpers import DEBUG
 
 
 class BoringEncoderBlock(nn.Module):
@@ -48,8 +49,9 @@ class BoringEncoderBlock(nn.Module):
         attn_mask:    (batch_size * num_heads, max_sequence_length, max_sequence_length)
         '''
         # Multi-head self-attn
-        # print('=' * 40)
-        # cprint('MHA self-attn', c='normal')
+        if DEBUG >= 1:
+            print('=' * 40)
+            cprint('MHA self-attn', c='normal')
         attn_output, _ = self.mha(x, x, x, attn_mask=mask)
 
         attn_output = self.dropout1(attn_output)
@@ -95,15 +97,17 @@ class BoringDecoderBlock(nn.Module):
         tgt_mast for encoder-decoder attn
         '''
         # Masked multi-head self-attn
-        print('=' * 40)
-        cprint('tgt_mask MHA self-attn', c='normal')
+        if DEBUG >= 1:
+            print('=' * 40)
+            cprint('tgt_mask MHA self-attn', c='normal')
         attn_output, _ = self.masked_mha(x, x, x, attn_mask=tgt_mask)
         attn_output = self.dropout1(attn_output)
         x = self.layer_norm1(x + attn_output)
         
         # Multi-head attn over encoder output: query=x, key=value=enc_output
-        print('=' * 40)
-        cprint('src_mask MHA encoder-decoder attn', c='normal')
+        if DEBUG >= 1:
+            print('=' * 40)
+            cprint('src_mask MHA encoder-decoder attn', c='normal')
         attn_output, _ = self.mha(x, enc_output, enc_output, attn_mask=src_mask)
         attn_output = self.dropout2(attn_output)
         x = self.layer_norm2(x + attn_output)
