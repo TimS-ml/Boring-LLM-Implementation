@@ -33,8 +33,8 @@ class FeedForward(nn.Module):
                  bias2: bool = True,
                  bias_gate: bool = True):
         super().__init__()
-        self.layer1 = nn.Linear(d_model, d_ff, bias=bias1)
-        self.layer2 = nn.Linear(d_ff, d_model, bias=bias2)
+        self.ln1 = nn.Linear(d_model, d_ff, bias=bias1)
+        self.ln2 = nn.Linear(d_ff, d_model, bias=bias2)
         self.dropout = nn.Dropout(dropout)
         self.activation = activation
         self.is_gated = is_gated
@@ -44,7 +44,7 @@ class FeedForward(nn.Module):
             self.linear_v = nn.Linear(d_model, d_ff, bias=bias_gate)
 
     def forward(self, x: Tensor) -> Tensor:
-        g = self.activation(self.layer1(x))
+        g = self.activation(self.ln1(x))
 
         if self.is_gated:
             x = g * self.linear_v(x)
@@ -52,6 +52,6 @@ class FeedForward(nn.Module):
             x = g
 
         x = self.dropout(x)
-        x = self.layer2(x)
+        x = self.ln2(x)
         return x
 
