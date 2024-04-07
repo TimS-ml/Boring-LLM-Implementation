@@ -348,6 +348,22 @@ def mprint(obj, magic_methods=False, private_methods=True, public_methods=True):
             print(f"    {item}")
 
 
+def get_layers(func):
+    '''
+    Usage:
+      from boring_nn import pe
+      pe_layers = get_layers(pe)
+      pe_name = 'SinusoidalPositionalEncoding'
+      pos_encoding = pe_layers[pe_name](d_model, dropout, max_len)
+    '''
+    func_layers = {}
+    for name, obj in inspect.getmembers(func):
+        if inspect.isclass(obj) and issubclass(obj, torch.nn.Module):
+            # func_layers[name.lower()] = obj
+            func_layers[name] = obj
+    return func_layers
+
+
 def cprint(*exprs, c=None, class_name=True):
     """
     Custom print function that prints the name of the variable/expression
