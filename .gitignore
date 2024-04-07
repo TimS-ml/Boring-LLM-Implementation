@@ -23,6 +23,10 @@ data/shakespeare_char/*
 !data/shakespeare_char/readme.md
 !data/shakespeare_char/prepare.py
 
+data/pdb/*
+!data/shakespeare/readme.md
+!data/shakespeare/prepare.py
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

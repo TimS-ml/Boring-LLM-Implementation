@@ -1,1 +1,0 @@
-- [CLI-Tool for download Huggingface models and datasets with aria2/wget+git](https://gist.github.com/padeoe/697678ab8e528b85a2a7bddafea1fa4f#file-readme_hfd-md)
