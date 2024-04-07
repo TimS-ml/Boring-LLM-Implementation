@@ -68,7 +68,7 @@ def SimpleScaledDotProductAttention(query: Tensor,
     query_len, key_len = query.size(-2), key.size(-2)
     attn_bias = torch.zeros(query_len, key_len, dtype=query.dtype)
     if DEBUG >= 1:
-        print('=' * 10 + 'ScaledDotProductAttention' + '=' * 10)
+        # print('=' * 10 + 'ScaledDotProductAttention' + '=' * 10)
         cprint(query.shape, key.shape, attn_bias.shape)
 
     # Generate a lower triangular matrix for causal masking
@@ -132,7 +132,7 @@ class ScaledDotProductAttention(nn.Module):
         attn_weight = query @ key.transpose(-2, -1) * scale_factor
 
         if attn_mask is not None:
-            print('=' * 10 + 'ScaledDotProductAttention' + '=' * 10)
+            # print('=' * 10 + 'ScaledDotProductAttention' + '=' * 10)
             if DEBUG >= 1:
                 cprint(query.shape)
                 cprint(key.shape)
@@ -250,7 +250,7 @@ class MultiHeadAttention(nn.Module):
         query_len, key_len = query.size(1), key.size(1)
 
         if DEBUG >= 1:
-            print('=' * 10 + 'MHA' + '=' * 10)
+            # print('=' * 10 + 'MHA' + '=' * 10)
             cprint(query.shape)
             cprint(key.shape)
             if attn_mask is not None:

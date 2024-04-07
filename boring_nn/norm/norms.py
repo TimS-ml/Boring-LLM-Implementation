@@ -80,7 +80,7 @@ class LayerNorm(nn.Module):
             self.beta = nn.Parameter(torch.zeros(normalized_shape))
 
         if DEBUG >= 1:
-            print('=' * 10 + 'LN' + '=' * 10)
+            # print('=' * 10 + 'LN' + '=' * 10)
             cprint(self.normalized_shape, self.elementwise_affine)
 
     def forward(self, x: Tensor) -> Tensor:
