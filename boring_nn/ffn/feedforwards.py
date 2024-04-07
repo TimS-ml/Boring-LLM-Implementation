@@ -45,7 +45,7 @@ class FeedForward(nn.Module):
             self.linear_v = nn.Linear(d_model, d_ff, bias=bias_gate)
 
         if DEBUG >= 1:
-            print('=' * 10 + 'FFN' + '=' * 10)
+            # print('=' * 10 + 'FFN' + '=' * 10)
             cprint(self.is_gated, self.activation)
 
     def forward(self, x: Tensor) -> Tensor:

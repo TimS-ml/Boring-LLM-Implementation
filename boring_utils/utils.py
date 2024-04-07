@@ -348,7 +348,7 @@ def mprint(obj, magic_methods=False, private_methods=True, public_methods=True):
             print(f"    {item}")
 
 
-def cprint(*exprs, c=None):
+def cprint(*exprs, c=None, class_name=True):
     """
     Custom print function that prints the name of the variable/expression
     alongside its value.
@@ -358,6 +358,7 @@ def cprint(*exprs, c=None):
     - globals, locals (dict, optional): Optional dictionaries to specify the namespace 
       for the evaluation. This allows the function to access variables outside of its 
       local scope.
+    - class_name (bool, optional): If True, prints the class name or function name along with the variable name.
     
     Example:
     x = 10
@@ -404,6 +405,13 @@ def cprint(*exprs, c=None):
     
     for arg, expr in zip(arg_list, exprs):
         try:
+            if class_name:
+                # Get the class name or function name from the caller's frame
+                class_or_func_name = frame.f_code.co_name
+                if 'self' in frame.f_locals:
+                    class_or_func_name = frame.f_locals['self'].__class__.__name__
+                arg = f"{class_or_func_name} -> {arg}"
+            
             if not c:
                 print(YELLOW_PATTERN % f"{arg}:")
                 pprint.pprint(expr)
