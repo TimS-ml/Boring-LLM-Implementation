@@ -1,6 +1,6 @@
 import torch
 from boring_utils.utils import cprint
-from boring_transformer.boring_transformer import BoringEncoderBlock
+from boring_transformer.legacy.boring_transformer import BoringEncoderBlock
 from torch.nn.utils.rnn import pad_sequence
 
 
