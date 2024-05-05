@@ -4,6 +4,7 @@ from boring_nn.attention import MultiHeadAttention
 from boring_nn.norm import LayerNorm
 from boring_nn.pe import LearnedPositionalEncoding
 
+
 class BoringBERTBlock(nn.Module):
     def __init__(self, d_model, num_heads, d_ff, dropout=0.1):
         super(BoringBERTBlock, self).__init__()

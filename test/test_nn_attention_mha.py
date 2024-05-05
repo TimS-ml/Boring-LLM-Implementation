@@ -12,8 +12,8 @@ x = torch.rand(B, T, C)
 # Then convert the lower triangular matrix to float; positions to attend to are marked as 0, others as -inf
 tril = torch.tril(torch.ones(T, T))
 mask = tril.float().masked_fill(tril == 0, float('-inf'))
-# cprint(mask, c='green')
-# print()
+cprint(mask, c='green')
+print()
 
 
 def test_multihead_attention_1():

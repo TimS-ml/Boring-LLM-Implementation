@@ -5,6 +5,7 @@
 *.pkl
 *.pt
 *.pyc
+*.bk
 input.txt
 replace.sh
 
