@@ -17,7 +17,14 @@ from boring_nn import attention, pe, norm, ffn
 from boring_nn.norm import l2_norm
 
 from boring_utils.utils import cprint, get_layers, get_device
-from boring_utils.nn_utils import always, exists
+from boring_utils.nn_utils import (
+    always, 
+    exists, 
+    groupby_prefix_and_trim, 
+    pick_and_pop,
+    max_neg_value,
+    pad_at_dim
+)
 from boring_utils.helpers import DEBUG
 
 attn_layers = get_layers(attention)
@@ -32,6 +39,33 @@ PE = pe_layers['LearnedPositionalEncoding']
 
 if DEBUG >= 2:
     cprint(attn_layers, norm_layers, ffn_layers, pe_layers)
+
+
+def dropout_seq(seq, mask, dropout):
+    b, n = seq.shape[:2]
+    device = seq.device
+    logits = torch.randn(b, n, device=device)
+
+    if mask is not None:
+        mask_value = max_neg_value(logits)
+        logits = logits.masked_fill(~mask, mask_value)
+
+    keep_prob = 1. - dropout
+    num_keep = max(1, int(keep_prob * n))
+    keep_indices = logits.topk(num_keep, dim=1).indices
+
+    batch_indices = torch.arange(b, device=device).unsqueeze(1)
+
+    seq = seq[batch_indices, keep_indices]
+
+    if mask is not None:
+        seq_counts = mask.sum(dim=-1)
+        seq_keep_counts = torch.ceil(seq_counts * keep_prob).int()
+        keep_mask = torch.arange(num_keep, device=device).unsqueeze(0) < seq_keep_counts.unsqueeze(1)
+
+        mask = mask[batch_indices, keep_indices] & keep_mask
+
+    return seq, mask
 
 
 class TokenEmbedding(nn.Module):
@@ -268,44 +302,33 @@ class BoringTransformer(nn.Module):
         self,
         *,
         d_model,
-        num_heads,
-        d_ff,
-        dropout=0.1,
-        max_len,  # max sequence length
-        num_layers=1,
-        l2norm_embed=False,
-        causal=False,  # TODO: this is not correct
         **kwargs
     ):
         super().__init__()
 
-        self.d_model = d_model
-        self.num_heads = num_heads
-        self.d_ff = d_ff
-        self.num_layers = num_layers
+        enc_kwargs, kwargs = groupby_prefix_and_trim('enc_', kwargs)
+        dec_kwargs, kwargs = groupby_prefix_and_trim('dec_', kwargs)
 
-        self.max_seq_len = max_len
-        self.l2norm_embed = l2norm_embed
+        enc_transformer_kwargs = pick_and_pop(['num_tokens', 'max_seq_len'], enc_kwargs)
+        enc_transformer_kwargs['emb_dropout'] = enc_kwargs.pop('emb_dropout', 0)
+        enc_transformer_kwargs['num_memory_tokens'] = enc_kwargs.pop('num_memory_tokens', None)
+        enc_transformer_kwargs['scaled_sinu_pos_emb'] = enc_kwargs.pop('scaled_sinu_pos_emb', False)
+        enc_transformer_kwargs['use_abs_pos_emb'] = enc_kwargs.pop('use_abs_pos_emb', True)
 
-        no_abs_pos_emb = max_len == 0
+        dec_transformer_kwargs = pick_and_pop(['num_tokens', 'max_seq_len'], dec_kwargs)
+        dec_transformer_kwargs['emb_dropout'] = dec_kwargs.pop('emb_dropout', 0)
+        dec_transformer_kwargs['scaled_sinu_pos_emb'] = dec_kwargs.pop('scaled_sinu_pos_emb', False)
+        dec_transformer_kwargs['use_abs_pos_emb'] = dec_kwargs.pop('use_abs_pos_emb', True)
 
-        if no_abs_pos_emb:
-            self.pos_emb = always(0)
-        else:
-            self.pos_emb = PE(d_model, dropout, max_len)
+        self.encoder = BoringTransformerWrapper(
+            **enc_transformer_kwargs,
+            attn_layers = Encoder(dim = d_model, **enc_kwargs)
+        )
 
-        self.dropout = nn.Dropout(dropout)
-
-        self.layers = nn.ModuleList([
-            AttentionLayers(
-                d_model=d_model, 
-                num_heads=num_heads, 
-                d_ff=d_ff, 
-                dropout=dropout, 
-                causal=causal
-            )
-            for _ in range(num_layers)
-        ])
+        self.decoder = BoringTransformerWrapper(
+            **dec_transformer_kwargs,
+            attn_layers = Decoder(dim = d_model, cross_attend = True, **dec_kwargs)
+        )
 
     def init_(self):
         if self.l2norm_embed:
@@ -314,27 +337,22 @@ class BoringTransformer(nn.Module):
 
     def forward(
         self,
-        x,
+        src, 
+        tgt,
         mask=None,
-        return_intermediates=False,
-        pos=None,
+        attn_mask = None,
+        src_prepend_embeds = None,
         **kwargs
     ):
-        b, n, device = x.shape[0], x.shape[1], x.device
 
-        external_pos_emb = exists(pos) and pos.dtype != torch.long
-        pos_emb = self.pos_emb(x, pos=pos) if not external_pos_emb else pos
-        x = x + pos_emb
+        enc = self.encoder(
+            src, mask = mask, attn_mask = attn_mask, return_embeddings = True)
 
-        x = self.dropout(x)
-        
-        # recursively feed x to self.layers
-        intermediates = []
-        for layer in self.layers:
-            x, layer_intermediates = layer(x, mask=mask, return_hiddens=True, **kwargs)
-            intermediates.append(layer_intermediates)
+        if exists(src_prepend_embeds) and exists(mask):
+            mask = pad_at_dim(mask, (src_prepend_embeds.shape[-2], 0), dim = -1, value = True)
 
-        if not return_intermediates:
-            return x
+        if self.training and self.cross_attn_tokens_dropout > 0:
+            enc, mask = dropout_seq(enc, mask, self.cross_attn_tokens_dropout)
 
-        return x, intermediates
+        out = self.decoder(tgt, context = enc, context_mask = mask)
+        return out
