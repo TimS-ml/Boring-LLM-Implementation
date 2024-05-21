@@ -16,12 +16,18 @@ BROWN_PATTERN = '\033[33m%s\033[0m'
 YELLOW_PATTERN = '\033[93m%s\033[0m'
 
 
-def set_seed(seed):
+def set_seed(seed, strict=False):
     np.random.seed(seed)
     torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
+    
+    # starting with pytorch 1.8, we don't need to set the seed for all devices
+    # if torch.cuda.is_available():
+    #     torch.cuda.manual_seed(seed)
+    #     torch.cuda.manual_seed_all(seed)
+
+    if strict:
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 
 def get_device():
