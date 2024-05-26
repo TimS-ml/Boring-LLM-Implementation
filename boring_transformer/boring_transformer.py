@@ -277,8 +277,6 @@ class BoringTransformerWrapper(nn.Module):
 
 '''
 TODO: WIP
-need update, add enc / dec layer number
-check out the causal flag's location
 '''
 class BoringTransformer(nn.Module):
     '''
