@@ -45,6 +45,8 @@ def SimpleScaledDotProductAttention(query: Tensor,
 
     d_k is related to the scaling factor, which is the square root of the dimension of the key vectors
 
+    NOTE: ScaledDotProductAttention assumes that its input Q, K, V are already in the appropriate attention space!
+
     Casual Masking (is_causal=True):
       Creating a lower triangular matrix (torch.ones(L, S).tril(diagonal=0)) 
       where only the current and past positions are marked as True (to be attended to), and future positions are masked out
