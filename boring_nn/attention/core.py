@@ -1,6 +1,6 @@
 from enum import Enum
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Tuple
 import torch
 from torch import Tensor
 import torch.nn as nn
@@ -130,3 +130,14 @@ class TalkingHeads:
 
     def post_softmax(self, attn):
         return einsum('b h i j, h k -> b k i j', attn, self.post_softmax_proj)
+
+
+class MemoryKeyValue:
+    def __init__(self, num_heads: int, num_mem_kv: int, dim_head: int):
+        self.mem_k = nn.Parameter(torch.randn(num_heads, num_mem_kv, dim_head))
+        self.mem_v = nn.Parameter(torch.randn(num_heads, num_mem_kv, dim_head))
+
+    def extend(self, k: Tensor, v: Tensor) -> Tuple[Tensor, Tensor]:
+        batch_size = k.shape[0]
+        mem_k, mem_v = map(lambda t: repeat(t, 'h n d -> b h n d', b=batch_size), (self.mem_k, self.mem_v))
+        return torch.cat((mem_k, k), dim=-2), torch.cat((mem_v, v), dim=-2)

@@ -29,10 +29,11 @@ from boring_utils.nn_utils import (
 )
 from boring_nn.attention.core import AttentionFactory, AttentionConfig
 from boring_nn.attention.core import (
+    PositionalEncoding,
+    AttentionMask,
     TalkingHeads,
     QKNormalization,
-    PositionalEncoding,
-    AttentionMask
+    MemoryKeyValue,
 )
 
 
@@ -42,13 +43,14 @@ class ComputeAttention:
         self.scale = scale
         self.dropout = dropout
         self.attention_strategy = AttentionFactory.get_strategy(config)
+        if config.talking_heads: self.talking_heads = TalkingHeads(config.num_heads)
 
     def forward(self, q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None):
         if self.config.flash_attention:
             return self._flash_attention(q, k, v, mask)
         
         dots = einsum('b h i d, b h j d -> b h i j', q, k) * self.scale
-        dots = self._apply_talking_heads_pre(dots)
+        if self.config.talking_heads: dots = self.talking_heads.pre_softmax(dots)
         dots = AttentionMask.apply_causal_mask(dots, self.config.causal)
         
         if exists(mask):
@@ -57,7 +59,7 @@ class ComputeAttention:
         
         attn = self.attention_strategy(dots)
         attn = self.dropout(attn)
-        attn = self._apply_talking_heads_post(attn)
+        if self.config.talking_heads: attn = self.talking_heads.post_softmax(attn)
         
         out = einsum('b h i j, b h j d -> b h i d', attn, v)
         return out, attn
@@ -65,16 +67,6 @@ class ComputeAttention:
     def _flash_attention(self, q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None):
         # Implement Flash Attention here
         pass
-
-    def _apply_talking_heads_pre(self, dots: Tensor) -> Tensor:
-        if self.config.talking_heads:
-            return self.talking_heads.pre_softmax(dots)
-        return dots
-
-    def _apply_talking_heads_post(self, attn: Tensor) -> Tensor:
-        if self.config.talking_heads:
-            return self.talking_heads.post_softmax(attn)
-        return attn
 
 
 class BoringAttention(nn.Module):
@@ -92,36 +84,22 @@ class BoringAttention(nn.Module):
         self.q_proj = nn.Linear(config.d_model, inner_dim, bias=config.bias)
         self.kv_proj = nn.Linear(config.d_model, inner_dim * 2, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
+        self.compute_attention = ComputeAttention(config, self.scale, self.dropout)
 
-        if config.attn_on_attn:  # attention-on-attention mechanism
+        # attention-on-attention mechanism
+        if config.attn_on_attn:
             self.to_out = nn.Sequential(nn.Linear(inner_dim, config.d_model * 2), nn.GLU()) 
         else:
             self.to_out = nn.Sequential(nn.Linear(inner_dim, config.d_model))
 
-        if config.talking_heads: self.talking_heads = TalkingHeads(config.num_heads)
-
-        if config.num_mem_kv > 0:
-            self.mem_k = nn.Parameter(torch.randn(config.num_heads, config.num_mem_kv, config.dim_head))
-            self.mem_v = nn.Parameter(torch.randn(config.num_heads, config.num_mem_kv, config.dim_head))
-
-        self.compute_attention = ComputeAttention(config, self.scale, self.dropout)
-
+        # memory key-value store
+        if config.num_mem_kv > 0: self.memory_kv = MemoryKeyValue(config.num_heads, config.num_mem_kv, config.dim_head)
 
     def _project_qkv(self, x: Tensor, context: Optional[Tensor] = None) -> Tuple[Tensor, Tensor, Tensor]:
         kv_input = default(context, x)
         q = self.q_proj(x)
         k, v = self.kv_proj(kv_input).chunk(2, dim=-1)
         return map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h=self.num_heads), (q, k, v))
-
-
-    def _add_memory_kv(self, k: Tensor, v: Tensor) -> Tuple[Tensor, Tensor]:
-        if self.config.num_mem_kv > 0:
-            batch_size = k.shape[0]
-            mem_k, mem_v = map(lambda t: repeat(t, 'h n d -> b h n d', b=batch_size), (self.mem_k, self.mem_v))
-            k = torch.cat((mem_k, k), dim=-2)
-            v = torch.cat((mem_v, v), dim=-2)
-        return k, v
-
 
     def forward(
             self, 
@@ -140,7 +118,7 @@ class BoringAttention(nn.Module):
         q, k = QKNormalization.apply(q, k, self.config)
         q, k, v = map(lambda t: PositionalEncoding.apply(t, self.config), (q, k, v))
 
-        k, v = self._add_memory_kv(k, v)
+        if self.config.num_mem_kv > 0: k, v = self.memory_kv.extend(k, v)
 
         mask = AttentionMask.prepare(mask, context_mask, q_len, k.size(-2), batch_size, self.num_heads)
 
