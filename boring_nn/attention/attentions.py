@@ -29,8 +29,53 @@ from boring_utils.nn_utils import (
 )
 from boring_nn.attention.core import AttentionFactory, AttentionConfig
 from boring_nn.attention.core import (
-    TalkingHeads
+    TalkingHeads,
+    QKNormalization,
+    PositionalEncoding,
+    AttentionMask
 )
+
+
+class ComputeAttention:
+    def __init__(self, config: AttentionConfig, scale: float, dropout: nn.Dropout):
+        self.config = config
+        self.scale = scale
+        self.dropout = dropout
+        self.attention_strategy = AttentionFactory.get_strategy(config)
+
+    def forward(self, q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None):
+        if self.config.flash_attention:
+            return self._flash_attention(q, k, v, mask)
+        
+        dots = einsum('b h i d, b h j d -> b h i j', q, k) * self.scale
+        dots = self._apply_talking_heads_pre(dots)
+        dots = AttentionMask.apply_causal_mask(dots, self.config.causal)
+        
+        if exists(mask):
+            mask_value = max_neg_value(dots)
+            dots.masked_fill_(~mask, mask_value)
+        
+        attn = self.attention_strategy(dots)
+        attn = self.dropout(attn)
+        attn = self._apply_talking_heads_post(attn)
+        
+        out = einsum('b h i j, b h j d -> b h i d', attn, v)
+        return out, attn
+
+    def _flash_attention(self, q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None):
+        # Implement Flash Attention here
+        pass
+
+    def _apply_talking_heads_pre(self, dots: Tensor) -> Tensor:
+        if self.config.talking_heads:
+            return self.talking_heads.pre_softmax(dots)
+        return dots
+
+    def _apply_talking_heads_post(self, attn: Tensor) -> Tensor:
+        if self.config.talking_heads:
+            return self.talking_heads.post_softmax(attn)
+        return attn
+
 
 class BoringAttention(nn.Module):
     def __init__(self, config: AttentionConfig):
@@ -53,59 +98,52 @@ class BoringAttention(nn.Module):
         else:
             self.to_out = nn.Sequential(nn.Linear(inner_dim, config.d_model))
 
-        self.attention_strategy = AttentionFactory.get_strategy(config)
-
-        if config.talking_heads:
-            self.pre_softmax_proj = nn.Parameter(torch.randn(config.num_heads, config.num_heads))
-            self.post_softmax_proj = nn.Parameter(torch.randn(config.num_heads, config.num_heads))
+        if config.talking_heads: self.talking_heads = TalkingHeads(config.num_heads)
 
         if config.num_mem_kv > 0:
             self.mem_k = nn.Parameter(torch.randn(config.num_heads, config.num_mem_kv, config.dim_head))
             self.mem_v = nn.Parameter(torch.randn(config.num_heads, config.num_mem_kv, config.dim_head))
 
-    def forward(self, x, context=None, mask=None, context_mask=None):
+        self.compute_attention = ComputeAttention(config, self.scale, self.dropout)
+
+
+    def _project_qkv(self, x: Tensor, context: Optional[Tensor] = None) -> Tuple[Tensor, Tensor, Tensor]:
+        kv_input = default(context, x)
+        q = self.q_proj(x)
+        k, v = self.kv_proj(kv_input).chunk(2, dim=-1)
+        return map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h=self.num_heads), (q, k, v))
+
+
+    def _add_memory_kv(self, k: Tensor, v: Tensor) -> Tuple[Tensor, Tensor]:
+        if self.config.num_mem_kv > 0:
+            batch_size = k.shape[0]
+            mem_k, mem_v = map(lambda t: repeat(t, 'h n d -> b h n d', b=batch_size), (self.mem_k, self.mem_v))
+            k = torch.cat((mem_k, k), dim=-2)
+            v = torch.cat((mem_v, v), dim=-2)
+        return k, v
+
+
+    def forward(
+            self, 
+            x: Tensor, 
+            context: Optional[Tensor] = None, 
+            mask: Optional[Tensor] = None, 
+            context_mask: Optional[Tensor] = None
+        ) -> Tuple[Tensor, Tensor]:
         """
         x: [batch_size, query_len, d_model] -> query
         context: [batch_size, key_len, d_model] -> key, value
         """
         batch_size, q_len = x.size(0), x.size(1)
-        kv_input = default(context, x)
 
-        q = self.q_proj(x)
-        k, v = self.to_kv(kv_input).chunk(2, dim=-1)
-        q, k, v = map(lambda t: rearrange(t, 'b n (h d) -> b h n d', h=self.num_heads), (q, k, v))
+        q, k, v = self._project_qkv(x, context)
+        q, k = QKNormalization.apply(q, k, self.config)
+        q, k, v = map(lambda t: PositionalEncoding.apply(t, self.config), (q, k, v))
 
-        if self.config.num_mem_kv > 0:
-            mem_k, mem_v = map(lambda t: repeat(t, 'h n d -> b h n d', b=batch_size), (self.mem_k, self.mem_v))
-            k = torch.cat((mem_k, k), dim=-2)
-            v = torch.cat((mem_v, v), dim=-2)
+        k, v = self._add_memory_kv(k, v)
 
-        dots = einsum('b h i d, b h j d -> b h i j', q, k) * self.scale
+        mask = AttentionMask.prepare(mask, context_mask, q_len, k.size(-2), batch_size, self.num_heads)
 
-        if self.config.talking_heads:
-            dots = einsum('b h i j, h k -> b k i j', dots, self.pre_softmax_proj)
-
-        if exists(mask) or exists(context_mask):
-            mask = default(mask, lambda: torch.ones(b, n, device=x.device).bool())
-            if not exists(context):
-                context_mask = default(context_mask, mask)
-            else: 
-                context_mask = default(context_mask, lambda: torch.ones(batch_size, k.shape[-2], device=x.device).bool())
-            mask_value = max_neg_value(dots)
-            mask = mask[:, None, :, None] * context_mask[:, None, None, :]
-            dots.masked_fill_(~mask, mask_value)
-
-        if self.config.causal:
-            i, j = dots.shape[-2:]
-            causal_mask = torch.ones((i, j), device=device).triu_(j - i + 1).bool()
-            dots.masked_fill_(causal_mask, max_neg_value(dots))
-
-        attn = self.attention_strategy(dots)
-        attn = self.dropout(attn)
-
-        if self.config.talking_heads:
-            attn = einsum('b h i j, h k -> b k i j', attn, self.post_softmax_proj)
-
-        out = einsum('b h i j, b h j d -> b h i d', attn, v)
+        out, attn = self.compute_attention(q, k, v, mask)
         out = rearrange(out, 'b h n d -> b n (h d)')
-        return self.to_out(out)
+        return self.to_out(out), attn

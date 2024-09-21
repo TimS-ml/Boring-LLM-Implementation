@@ -6,6 +6,13 @@ from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
 
+from einops import (
+    rearrange, 
+    repeat,
+    reduce,
+    einsum
+)
+
 
 class AttentionType(Enum):
     SOFTMAX = "softmax"
@@ -113,10 +120,13 @@ class QKNormalization:
 
 
 class TalkingHeads:
-    @staticmethod
-    def pre_softmax(dots, proj):
-        return einsum('bhij,hk->bkij', dots, proj)
+    def __init__(self, num_heads):
+        super().__init__()
+        self.pre_softmax_proj = nn.Parameter(torch.randn(num_heads, num_heads))
+        self.post_softmax_proj = nn.Parameter(torch.randn(num_heads, num_heads))
 
-    @staticmethod
-    def post_softmax(attn, proj):
-        return einsum('bhij,hk->bkij', attn, proj)
+    def pre_softmax(self, dots):
+        return einsum('b h i j, h k -> b k i j', dots, self.pre_softmax_proj)
+
+    def post_softmax(self, attn):
+        return einsum('b h i j, h k -> b k i j', attn, self.post_softmax_proj)
