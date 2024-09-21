@@ -12,7 +12,7 @@ pip install -e .
 
 
 # Usage
-## Attention
+## Casual Attention
 ```python
 import torch
 from boring_utils.utils import cprint
@@ -34,7 +34,28 @@ cprint(output.shape)
 ```
 
 
-## Transformer Block
+## Complex Attention
+```python
+from boring_nn.attention import BoringAttention 
+from boring_nn.attention.core import AttentionConfig, AttentionType
+
+# ... same as above
+
+# Calling the attention function
+cfg = AttentionConfig(
+    d_model=C,
+    num_mem_kv=2,       # enable memory key-value
+    attn_on_attn=True,  # attention on attention
+    attn_type=AttentionType.TOPK  # sparse attention
+)
+att = MultiHeadAttention(d_model=C, num_heads=8)
+output = att(x, x, x)
+
+cprint(output.shape)
+```
+
+
+## Transformer Block (WIP)
 ```python
 import torch
 from boring_utils.utils import cprint
@@ -44,6 +65,9 @@ input_seq = torch.randn(batch_size, max_seq_len, d_model)
 output_seq = encoder_block(input_seq)
 cprint(output_seq.shape == (batch_size, max_seq_len, d_model))
 ```
+
+
+## LLM Block (WIP)
 
 
 ## Built-In DEBUG Flag

@@ -20,6 +20,11 @@ class AttentionType(Enum):
     TOPK = "topk"          # If set, use top-k sparse attention and sets the rest to zero
 
 
+class AttentionTypeConfig(BaseModel):
+    type: AttentionType
+    sparse_topk: int = 10
+
+
 class QKNormConfig(BaseModel):
     enabled: bool = False
     groups: int = 1
@@ -38,7 +43,7 @@ class AttentionConfig(BaseModel):
     attn_on_attn: bool = False      # Modified Attention-on-attention mechanism
     flash_attention: bool = False   # Kernelized attention mechanism
     rotary_pos_emb: bool = False    # RoPE positional embeddings
-    attention_type: AttentionType = AttentionType.SOFTMAX  # Sparse attention type
+    attn_type_config: AttentionTypeConfig
     qk_norm: QKNormConfig = QKNormConfig()  # l2 normalization of qk before softmax
 
 
@@ -81,10 +86,11 @@ class TopKStrategy(AttentionStrategy):
 class AttentionFactory:
     @staticmethod
     def get_strategy(config: AttentionConfig) -> AttentionStrategy:
-        if config.use_entmax15:
+        attn_type = config.attn_type_config.type
+        if attn_type == AttentionType.ENTMAX15:
             return Entmax15Strategy()
-        elif config.sparse_topk:
-            return TopKStrategy(config.sparse_topk)
+        elif attn_type == AttentionType.TOPK:
+            return TopKStrategy(config.attn_type_config.sparse_topk)
         else:
             return SoftmaxStrategy()
 
