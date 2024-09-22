@@ -1,5 +1,5 @@
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional, Tuple
 import torch
 from torch import Tensor
@@ -21,30 +21,30 @@ class AttentionType(Enum):
 
 
 class AttentionTypeConfig(BaseModel):
-    type: AttentionType
-    sparse_topk: int = 10
+    type: AttentionType = Field(AttentionType.SOFTMAX, description="Type of attention mechanism")
+    sparse_topk: int    = Field(10,                    description="Top-k value for sparse attention")
 
 
 class QKNormConfig(BaseModel):
-    enabled: bool = False
-    groups: int = 1
-    scale: float = 10.0
+    enabled: bool  = Field(False, description="Whether to enable QK normalization")
+    groups: int    = Field(1,     description="Number of groups for QK normalization")
+    scale: float   = Field(10.0,  description="Scale factor for QK normalization")
 
 
 class AttentionConfig(BaseModel):
-    d_model: int = 512              # Input and output dim, usually d_model=dim_head*num_heads
-    dim_head: int = 64              # Dimension of each attention head
-    num_heads: int = 8              # Number of attention heads
-    dropout: float = 0.             # Dropout rate
-    bias: bool = False              # Whether to use bias in qkv linear projections
-    causal: bool = False            # Whether to apply a causal mask to attention weights
-    num_mem_kv: int = 0             # Number of memory key/value pairs, concated to the input kv
-    talking_heads: bool = False     # Learned linear projections before and after the softmax
-    attn_on_attn: bool = False      # Modified Attention-on-attention mechanism
-    flash_attention: bool = False   # Kernelized attention mechanism
-    rotary_pos_emb: bool = False    # RoPE positional embeddings
-    attn_type_config: AttentionTypeConfig
-    qk_norm: QKNormConfig = QKNormConfig()  # l2 normalization of qk before softmax
+    d_model: Optional[int]          = Field(512,   description="Input and output dim, usually d_model=dim_head*num_heads")
+    dim_head: Optional[int]         = Field(64,    description="Dimension of each attention head")
+    num_heads: Optional[int]        = Field(8,     description="Number of attention heads")
+    dropout: Optional[float]        = Field(0.,    description="Dropout rate")
+    bias: Optional[bool]            = Field(False, description="Whether to use bias in qkv linear projections")
+    causal: Optional[bool]          = Field(False, description="Whether to apply a causal mask to attention weights")
+    num_mem_kv: Optional[int]       = Field(0,     description="Number of memory key/value pairs, concated to the input kv")
+    talking_heads: Optional[bool]   = Field(False, description="Learned linear projections before and after the softmax")
+    attn_on_attn: Optional[bool]    = Field(False, description="Modified Attention-on-attention mechanism")
+    flash_attention: Optional[bool] = Field(False, description="Kernelized attention mechanism")
+    rotary_pos_emb: Optional[bool]  = Field(False, description="RoPE positional embeddings")
+    attn_type_config: AttentionTypeConfig = Field(default_factory=AttentionTypeConfig, description="Attention type configuration")
+    qk_norm: QKNormConfig           = Field(default_factory=QKNormConfig, description="l2 normalization of qk before softmax")
 
 
 class AttentionStrategy(nn.Module):
