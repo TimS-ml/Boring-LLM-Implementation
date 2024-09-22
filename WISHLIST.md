@@ -1,5 +1,6 @@
 # Design
-- [ ] more readable config
+- [x] more readable config
+- [ ] re-write ./cofig/ folder
 
 
 # Attention

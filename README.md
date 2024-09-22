@@ -59,11 +59,23 @@ cprint(output.shape)
 ```python
 import torch
 from boring_utils.utils import cprint
-from boring_transformer.legacy.boring_transformer import BoringEncoderBlock
+from boring_transformer.core import TransformerLayersConfig, TransformerLayerWrapConfig
+from boring_nn.attention.core import AttentionConfig, AttentionType
 
-input_seq = torch.randn(batch_size, max_seq_len, d_model)
-output_seq = encoder_block(input_seq)
-cprint(output_seq.shape == (batch_size, max_seq_len, d_model))
+config = TransformerLayersConfig(
+    dim=512,
+    depth=6,
+    num_heads=8,
+    causal=True,
+    layer_config=TransformerLayerWrapConfig(
+        attention=AttentionConfig(
+            d_model=512,
+            dim_head=64,
+            dropout=0.1
+        ),
+        ffn_dim=2048
+    )
+)
 ```
 
 
