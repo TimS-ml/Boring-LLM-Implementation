@@ -4,17 +4,19 @@ Gated: GLU
 
 - https://nn.labml.ai/transformers/feed_forward.html
 '''
+from pydantic import BaseModel, Field
+from typing import Optional, List
 
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 # from einops import rearrange
 
-from boring_utils.utils import cprint
-from boring_utils.helpers import DEBUG
-
 from torch import Tensor
 from typing import Optional, Tuple, Union
+
+from boring_utils.utils import cprint
+from boring_utils.helpers import DEBUG
 
 
 class FeedForward(nn.Module):
@@ -26,7 +28,7 @@ class FeedForward(nn.Module):
     """
     def __init__(self, 
                  d_model: int, 
-                 d_ff: int,
+                 ffn_dim: int,
                  dropout: float = 0.1,
                  activation=nn.ReLU(),
                  is_gated: bool = False,
@@ -34,15 +36,15 @@ class FeedForward(nn.Module):
                  bias2: bool = True,
                  bias_gate: bool = True):
         super().__init__()
-        self.linear1 = nn.Linear(d_model, d_ff, bias=bias1)
-        self.linear2 = nn.Linear(d_ff, d_model, bias=bias2)
+        self.linear1 = nn.Linear(d_model, ffn_dim, bias=bias1)
+        self.linear2 = nn.Linear(ffn_dim, d_model, bias=bias2)
         self.dropout = nn.Dropout(dropout)
         self.activation = activation
         self.is_gated = is_gated
         if is_gated:
             # If there is a gate the linear layer to transform inputs to
             # be multiplied by the gate, parameterized by weight $V$ and bias $c$
-            self.linear_v = nn.Linear(d_model, d_ff, bias=bias_gate)
+            self.linear_v = nn.Linear(d_model, ffn_dim, bias=bias_gate)
 
         if DEBUG >= 1:
             # print('=' * 10 + 'FFN' + '=' * 10)

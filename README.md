@@ -63,13 +63,12 @@ from boring_transformer.core import TransformerLayersConfig, TransformerLayerWra
 from boring_nn.attention.core import AttentionConfig, AttentionType
 
 config = TransformerLayersConfig(
-    dim=512,
+    d_model=512,
     depth=6,
     num_heads=8,
     causal=True,
     layer_config=TransformerLayerWrapConfig(
         attention=AttentionConfig(
-            d_model=512,
             dim_head=64,
             dropout=0.1
         ),

@@ -6,21 +6,41 @@ from torch import Tensor
 
 from boring_transformer.core import TransformerLayersConfig, BoringTransformerLayerWrap
 
+# TODO: checkout the x-transformer's implementation
+# if layer_type == 'a':
+#     layer = Attention(dim, heads = heads, causal = causal, **attn_kwargs)
+# elif layer_type == 'c':
+#     layer = Attention(dim, heads = heads, **{**attn_kwargs, **cross_attn_kwargs})
+# elif layer_type == 'f':
+#     layer = FeedForward(dim, **ff_kwargs)
+#     layer = layer if not macaron else Scale(0.5, layer)
+# else:
+#     raise Exception(f'invalid layer type {layer_type}')
 
 class BoringTransformerLayers(nn.Module):
+    """
+    BoringTransformerLayers is a stack of transformer layers.
+    with layer specific modifications like sandwich, macaron, cross-attention, etc.
+    """
     def __init__(self, config: TransformerLayersConfig):
         super().__init__()
         self.config = config
         self.layers = nn.ModuleList([])
         self.layer_types = self._determine_layer_types()
-
+        
+        # TODO: update this
+        # Basically it pass different set of params (init) 
+        # and mod the forward as well
         for layer_type in self.layer_types:
             if layer_type == 'a':
+                # NOTE: Normal Attention, causal, attn_kwargs
                 layer = BoringTransformerLayerWrap(config.layer_config)
             elif layer_type == 'c':
-                layer = BoringTransformerLayerWrap(config.layer_config)  # CrossAttention
+                # NOTE: CrossAttention, attn_kwargs + cross_attn_kwargs
+                layer = BoringTransformerLayerWrap(config.layer_config)
             elif layer_type == 'f':
-                layer = BoringTransformerLayerWrap(config.layer_config)  # FeedForward
+                # NOTE: FeedForward only + ff_kwargs
+                layer = BoringTransformerLayerWrap(config.layer_config)
             else:
                 raise ValueError(f"Invalid layer type: {layer_type}")
             
