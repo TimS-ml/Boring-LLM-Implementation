@@ -6,16 +6,11 @@ from torch import Tensor
 
 from boring_transformer.core import TransformerLayersConfig, BoringTransformerLayerWrap
 
-# TODO: checkout the x-transformer's implementation
-# if layer_type == 'a':
-#     layer = Attention(dim, heads = heads, causal = causal, **attn_kwargs)
-# elif layer_type == 'c':
-#     layer = Attention(dim, heads = heads, **{**attn_kwargs, **cross_attn_kwargs})
-# elif layer_type == 'f':
-#     layer = FeedForward(dim, **ff_kwargs)
-#     layer = layer if not macaron else Scale(0.5, layer)
-# else:
-#     raise Exception(f'invalid layer type {layer_type}')
+from boring_transformer.core import TransformerLayersConfig, TransformerLayerWrapConfig
+from boring_nn.attention.core import AttentionConfig
+from boring_nn.ffn.core import FeedForwardConfig, BoringFeedForward
+from boring_nn.attention.attn import BoringAttention
+
 
 class BoringTransformerLayers(nn.Module):
     """
@@ -28,19 +23,35 @@ class BoringTransformerLayers(nn.Module):
         self.layers = nn.ModuleList([])
         self.layer_types = self._determine_layer_types()
         
-        # TODO: update this
         # Basically it pass different set of params (init) 
         # and mod the forward as well
         for layer_type in self.layer_types:
+
+            # NOTE: Normal Attention, causal, attn_kwargs
             if layer_type == 'a':
-                # NOTE: Normal Attention, causal, attn_kwargs
-                layer = BoringTransformerLayerWrap(config.layer_config)
+                layer = BoringTransformerLayerWrap(TransformerLayerWrapConfig(
+                    attention=config.attn_kwargs,
+                    ff_kwargs=config.ff_kwargs,
+                    use_ffn=True
+                ))
+
+            # NOTE: CrossAttention, attn_kwargs + cross_attn_kwargs
             elif layer_type == 'c':
-                # NOTE: CrossAttention, attn_kwargs + cross_attn_kwargs
-                layer = BoringTransformerLayerWrap(config.layer_config)
+                layer = BoringTransformerLayerWrap(TransformerLayerWrapConfig(
+                    attention={**config.attn_kwargs.dict(), **config.cross_attn_kwargs.dict()},
+                    ff_kwargs=config.ff_kwargs,
+                    use_ffn=True
+                ))
+
+            # NOTE: FeedForward only + ff_kwargs
             elif layer_type == 'f':
-                # NOTE: FeedForward only + ff_kwargs
-                layer = BoringTransformerLayerWrap(config.layer_config)
+                layer = BoringTransformerLayerWrap(TransformerLayerWrapConfig(
+                    attention=AttentionConfig(d_model=config.attn_kwargs.d_model),
+                    ff_kwargs=config.ff_kwargs,
+                    use_ffn=True
+                ))
+                if self.config.macaron:
+                    layer = Scale(0.5, layer)
             else:
                 raise ValueError(f"Invalid layer type: {layer_type}")
             
@@ -62,15 +73,19 @@ class BoringTransformerLayers(nn.Module):
 
         if self.config.sandwich_coef:
             assert 0 < self.config.sandwich_coef <= self.config.depth, 'sandwich coefficient should be between 0 and depth'
-            layer_types = ('a',) * int(self.config.sandwich_coef) + \
-                          default_block * (self.config.depth - int(self.config.sandwich_coef)) + \
-                          ('f',) * int(self.config.sandwich_coef)
+            layer_types = ('a',) * self.config.sandwich_coef + default_block * (self.config.depth - self.config.sandwich_coef) + ('f',) * self.config.sandwich_coef
         else:
             layer_types = default_block * self.config.depth
 
         return layer_types
 
-    def forward(self, x, context=None, mask=None, context_mask=None):
+    def forward(
+        self, 
+        x: Tensor, 
+        context: Optional[Tensor] = None, 
+        mask: Optional[Tensor] = None, 
+        context_mask: Optional[Tensor] = None
+    ) -> Tensor:
         for layer_type, layer in zip(self.layer_types, self.layers):
             if layer_type == 'a':
                 x = layer(x, mask=mask)
@@ -79,6 +94,15 @@ class BoringTransformerLayers(nn.Module):
             elif layer_type == 'f':
                 x = layer(x)
         return x
+
+class Scale(nn.Module):
+    def __init__(self, scale, fn):
+        super().__init__()
+        self.scale = scale
+        self.fn = fn
+
+    def forward(self, x, **kwargs):
+        return self.fn(x, **kwargs) * self.scale
 
 
 class BoringEncoder(BoringTransformerLayers):

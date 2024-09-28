@@ -5,19 +5,15 @@ import torch.nn as nn
 from torch import Tensor
 
 from boring_llm_base.base_config import BaseConfig
-from boring_nn.attention.core import AttentionConfig
+from boring_nn.attention.core import AttentionConfig, CrossAttentionConfig
 from boring_nn.ffn.core import FeedForwardConfig
 from boring_nn.attention.attn import BoringAttention
 
 
 class TransformerLayerWrapConfig(BaseConfig):
-    attention: AttentionConfig     = Field(default_factory=AttentionConfig, 
-                                                  description="Attention configuration")
-
-
-class CrossAttentionConfig(AttentionConfig):
-    # Any cross-attention specific fields can go here
-    pass
+    attn_kwargs: AttentionConfig = Field(default_factory=AttentionConfig)
+    cross_attn_kwargs: CrossAttentionConfig = Field(default_factory=CrossAttentionConfig)
+    ff_kwargs: FeedForwardConfig = Field(default_factory=FeedForwardConfig)
 
 
 # TODO: double check the causal param
@@ -35,10 +31,10 @@ class TransformerLayersConfig(BaseConfig):
     custom_layers: Optional[List[str]] = Field(None,  description="Custom layer configuration")
     sandwich_coef: Optional[float]     = Field(None,  description="Sandwich coefficient for layer configuration")
     macaron: Optional[bool]            = Field(False, description="Whether to use Macaron architecture")
+    
+    # layer config
+    layer_config: TransformerLayerWrapConfig = Field(default_factory=TransformerLayerWrapConfig)
 
-    attn_kwargs: AttentionConfig = Field(default_factory=AttentionConfig)
-    cross_attn_kwargs: CrossAttentionConfig = Field(default_factory=CrossAttentionConfig)
-    ff_kwargs: FeedForwardConfig = Field(default_factory=FeedForwardConfig)
 
     def __init__(self, **data):
         super().__init__(**data)
@@ -54,21 +50,12 @@ class BoringTransformerLayerWrap(nn.Module):
         super().__init__()
         self.config = config
         self.attention = BoringAttention(config.attention)
-        self.layer_norm = nn.LayerNorm(config.d_model)
+        self.layer_norm = nn.LayerNorm(config.attention.d_model)
         
         if config.use_ffn:
-            self.ffn = self._build_ffn()
-            self.ffn_layer_norm = nn.LayerNorm(config.d_model)
+            self.ffn = BoringFeedForward(config.ff_kwargs)
+            self.ffn_layer_norm = nn.LayerNorm(config.attention.d_model)
         
-    # TODO: replace with FeedForward
-    def _build_ffn(self):
-        return nn.Sequential(
-            nn.Linear(self.config.d_model, self.config.ffn_dim),
-            nn.ReLU(),
-            nn.Linear(self.config.ffn_dim, self.config.d_model),
-            nn.Dropout(self.config.dropout)
-        )
-
     def forward(
         self, 
         x: Tensor, 
@@ -92,8 +79,6 @@ class BoringTransformerLayerWrap(nn.Module):
 
 if __name__ == '__main__':
     from boring_utils.utils import cprint
-    from boring_transformer.core import TransformerLayersConfig, TransformerLayerWrapConfig
-    from boring_nn.attention.core import AttentionConfig
     
     config = TransformerLayersConfig(
         d_model=512,
