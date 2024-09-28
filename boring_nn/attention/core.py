@@ -13,6 +13,8 @@ from einops import (
     einsum
 )
 
+from boring_llm_base.base_config import BaseConfig
+
 
 class AttentionType(Enum):
     SOFTMAX = "softmax"
@@ -31,13 +33,14 @@ class QKNormConfig(BaseModel):
     scale: float   = Field(10.0,  description="Scale factor for QK normalization")
 
 
-class AttentionConfig(BaseModel):
-    d_model: Optional[int]          = Field(512,   description="Input and output dim, usually d_model=dim_head*num_heads")
+class AttentionConfig(BaseConfig):
+    # basic
     dim_head: Optional[int]         = Field(64,    description="Dimension of each attention head")
     num_heads: Optional[int]        = Field(8,     description="Number of attention heads")
-    dropout: Optional[float]        = Field(0.,    description="Dropout rate")
-    bias: Optional[bool]            = Field(False, description="Whether to use bias in qkv linear projections")
     causal: Optional[bool]          = Field(False, description="Whether to apply a causal mask to attention weights")
+    bias: Optional[bool]            = Field(False, description="Whether to use bias in qkv linear projections")
+
+    # advanced
     num_mem_kv: Optional[int]       = Field(0,     description="Number of memory key/value pairs, concated to the input kv")
     talking_heads: Optional[bool]   = Field(False, description="Learned linear projections before and after the softmax")
     attn_on_attn: Optional[bool]    = Field(False, description="Modified Attention-on-attention mechanism")
