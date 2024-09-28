@@ -30,12 +30,13 @@ class ActivationConfig(BaseModel):
 
 class FeedForwardConfig(BaseConfig):
     ffn_dim: int                   = Field(2048,  description="Feed-forward network dimension")
-    ffn_dim_out: Optional[int]     = Field(None, description="Output dimension (if None, same as input)")
-    mult: int                  = Field(4,     description="Multiplier for inner dimension")
-    post_act_ln: bool          = Field(False, description="Whether to use LayerNorm after activation")
-    no_bias: bool              = Field(False, description="Whether to remove bias from linear layers")
-    zero_init_output: bool     = Field(False, description="Whether to initialize output layer to zero")
-    activation: ActivationConfig = Field(default_factory=ActivationConfig, description="Activation function configuration")
+    ffn_dim_out: Optional[int]     = Field(None,  description="Output dimension (if None, same as input)")
+    mult: int                      = Field(4,     description="Multiplier for inner dimension")
+    post_act_ln: bool              = Field(False, description="Whether to use LayerNorm after activation")
+    no_bias: bool                  = Field(False, description="Whether to remove bias from linear layers")
+    zero_init_output: bool         = Field(False, description="Whether to initialize output layer to zero")
+    activation: ActivationConfig   = Field(default_factory=ActivationConfig, 
+                                                  description="Activation function configuration")
 
 
 class BoringFeedForward(nn.Module):

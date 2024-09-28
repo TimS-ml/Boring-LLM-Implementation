@@ -50,6 +50,12 @@ class AttentionConfig(BaseConfig):
     qk_norm: QKNormConfig           = Field(default_factory=QKNormConfig, description="l2 normalization of qk before softmax")
 
 
+# TODO
+class CrossAttentionConfig(AttentionConfig):
+    # Any cross-attention specific fields can go here
+    pass
+
+
 class AttentionStrategy(nn.Module):
     def forward(self, qk_dots: Tensor) -> Tensor:
         raise NotImplementedError
