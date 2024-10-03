@@ -1,7 +1,13 @@
 import pytest
 import torch
-from boring_nn.ffn.core import BoringFeedForward, FeedForwardConfig, ActivationType, ActivationConfig
+from boring_nn.ffn.core import (
+    FeedForwardConfig, ActivationType, ActivationConfig,
+    BoringFeedForward
+)
 
+# ------------------------------
+# Base Config
+# ------------------------------
 @pytest.fixture
 def default_config():
     return FeedForwardConfig(
@@ -11,6 +17,10 @@ def default_config():
         activation=ActivationConfig(type=ActivationType.GELU)
     )
 
+
+# ------------------------------
+# Shape Tests 
+# ------------------------------
 def test_output_shape(default_config):
     ffn = BoringFeedForward(default_config)
     x = torch.randn(2, 10, 512)
@@ -28,6 +38,10 @@ def test_zero_init_output():
     ffn = BoringFeedForward(config)
     assert torch.allclose(ffn.net[-1].weight, torch.zeros_like(ffn.net[-1].weight))
 
+
+# ------------------------------
+# Config Tests 
+# ------------------------------
 def test_glu_activation():
     config = FeedForwardConfig(
         d_model=512,
@@ -61,3 +75,6 @@ def test_no_bias():
     ffn = BoringFeedForward(config)
     assert ffn.net[0].bias is None
     assert ffn.net[-1].bias is None
+
+
+# import IPython; IPython.embed()
