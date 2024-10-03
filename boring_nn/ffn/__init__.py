@@ -1,1 +1,2 @@
-from .feedforwards import *
+# from .feedforwards import *
+from .core import BoringFeedForward
