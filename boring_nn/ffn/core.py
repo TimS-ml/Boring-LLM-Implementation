@@ -22,14 +22,15 @@ class ActivationType(Enum):
 
 
 class ActivationConfig(BaseModel):
-    type: ActivationType = Field(default=ActivationType.GELU, description="Type of activation function")
-    use_glu: bool        = Field(default=False,               description="Enable Gated Linear Unit (GLU) with activation")
+    type: ActivationType      = Field(default=ActivationType.GELU, description="Type of activation function")
+    use_glu: bool             = Field(default=False,               description="Enable Gated Linear Unit (GLU) with activation")
+    mult_bias: Optional[bool] = Field(default=True,                description="ST-MOE's bias improvement")
 
 
 class FeedForwardConfig(BaseConfig):
-    ffn_dim: int                     = Field(default=2048,  description="Feed-forward network dimension")
+    # input ffn_dim = d_model
     ffn_dim_out: Optional[int]       = Field(default=None,  description="Output dimension (if None, same as input)")
-    mult: Optional[int]              = Field(default=4,     description="Multiplier for inner dimension")
+    mult_dim: Optional[int]          = Field(default=4,     description="Multiplier for inner dimension")
     post_act_ln: Optional[bool]      = Field(default=False, description="Whether to use LayerNorm after activation")
     no_bias: Optional[bool]          = Field(default=False, description="Whether to remove bias from linear layers")
     zero_init_output: Optional[bool] = Field(default=False, description="Whether to initialize output layer to zero")
