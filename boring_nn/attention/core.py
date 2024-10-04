@@ -118,7 +118,7 @@ class PositionalEncoding:
 
 class AttentionMask:
     @staticmethod
-    def prepare(attn_mask, query_len, key_len, batch_size, num_heads):
+    def prepare(attn_mask, context_mask, query_len, key_len, batch_size, num_heads):
         pass
 
     @staticmethod

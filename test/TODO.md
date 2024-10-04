@@ -1,6 +1,6 @@
 # Test Group 1
-- [ ] Config
-- [ ] FFN
+- [x] Config
+- [x] FFN
 - [ ] Attention
 
 
