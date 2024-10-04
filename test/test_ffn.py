@@ -23,8 +23,7 @@ def glu_config():
         d_model=512,
         ffn_dim=2048,
         dropout=0.1,
-        activation=ActivationConfig(use_glu=True)
-        # activation=ActivationConfig(type=ActivationType.GLU)
+        activation=ActivationConfig(use_glu=True, type=ActivationType.GELU)
     )
 
 
@@ -54,17 +53,16 @@ def test_zero_init_output():
 # ------------------------------
 def test_different_activation_types():
     for activation_type in ActivationType:
-        if activation_type != ActivationType.GLU:
-            config = FeedForwardConfig(
-                d_model=512,
-                ffn_dim=2048,
-                dropout=0.1,
-                activation=ActivationConfig(type=activation_type)
-            )
-            ffn = BoringFeedForward(config)
-            x = torch.randn(2, 10, 512)
-            output = ffn(x)
-            assert output.shape == (2, 10, 512)
+        config = FeedForwardConfig(
+            d_model=512,
+            ffn_dim=2048,
+            dropout=0.1,
+            activation=ActivationConfig(type=activation_type)
+        )
+        ffn = BoringFeedForward(config)
+        x = torch.randn(2, 10, 512)
+        output = ffn(x)
+        assert output.shape == (2, 10, 512)
 
 def test_no_bias():
     config = FeedForwardConfig(
@@ -75,9 +73,6 @@ def test_no_bias():
     )
     ffn = BoringFeedForward(config)
 
-    activation_type = config.activation.type
-    if activation_type != ActivationType.GLU:
-        assert ffn.net[0][0].bias is None
     assert ffn.net[-1].bias is None
 
 
@@ -100,14 +95,11 @@ def test_glu_no_bias():
         ffn_dim=2048,
         dropout=0.1,
         activation=ActivationConfig(use_glu=True),
-        # activation=ActivationConfig(type=ActivationType.GLU),
         no_bias=True
     )
     ffn = BoringFeedForward(config)
 
-    activation_type = config.activation.type
-    if activation_type != ActivationType.GLU:
-        assert ffn.net[0][0].bias is None
+    assert ffn.net[0].proj.bias is None
     assert ffn.net[-1].bias is None
 
 

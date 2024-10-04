@@ -12,10 +12,10 @@ from boring_utils.helpers import DEBUG
 
 
 class GLU(nn.Module):
-    def __init__(self, dim_in: int, dim_out: int, activation_type: ActivationType):
+    def __init__(self, dim_in: int, dim_out: int, activation_type: ActivationType, use_bias: bool = True):
         super().__init__()
         self.act = BoringFeedForward.get_activation(activation_type)
-        self.proj = nn.Linear(dim_in, dim_out * 2)
+        self.proj = nn.Linear(dim_in, dim_out * 2, bias=use_bias)
 
     def forward(self, x: Tensor) -> Tensor:
         x, gate = self.proj(x).chunk(2, dim=-1)
@@ -36,12 +36,11 @@ class BoringFeedForward(nn.Module):
         inner_dim = int(dim * mult)
 
         activation_type = config.activation.type
-        use_glu = config.activation.use_glu or activation_type == ActivationType.GLU
+        use_glu = config.activation.use_glu
 
         # project_in is the first layer of the FFN
         if use_glu:
-            config.activation.type = ActivationType.GLU
-            self.glu = GLU(dim, inner_dim, activation_type)
+            self.glu = GLU(dim, inner_dim, activation_type, use_bias=not config.no_bias)
             project_in = self.glu
         else:
             activation = self.get_activation(activation_type)

@@ -19,12 +19,11 @@ class ActivationType(Enum):
     GELU    = "gelu"
     SWISH   = "swish"
     RELU_SQUARED = "relu_squared"
-    GLU     = "glu"  # or you can set use_glu=True in ActivationConfig
 
 
 class ActivationConfig(BaseModel):
     type: ActivationType = Field(default=ActivationType.GELU, description="Type of activation function")
-    use_glu: bool        = Field(default=False,               description="Whether to use GLU variant")
+    use_glu: bool        = Field(default=False,               description="Enable Gated Linear Unit (GLU) with activation")
 
 
 class FeedForwardConfig(BaseConfig):
