@@ -3,6 +3,10 @@ import torch
 from boring_nn.attention.main import BoringAttention
 from boring_nn.attention.core import AttentionConfig, AttentionType, AttentionTypeConfig
 
+
+# ------------------------------
+# Base Config
+# ------------------------------
 @pytest.fixture
 def default_config():
     return AttentionConfig(
@@ -13,6 +17,10 @@ def default_config():
         causal=False
     )
 
+
+# ------------------------------
+# Shape Tests
+# ------------------------------
 def test_output_shape(default_config):
     attention = BoringAttention(default_config)
     x = torch.randn(2, 10, 512)
@@ -32,6 +40,10 @@ def test_causal_attention():
     _, attn = causal_attention(x)
     assert torch.allclose(attn[:,:,-1,:-1], torch.zeros_like(attn[:,:,-1,:-1]))
 
+
+# ------------------------------
+# Shape Tests 2
+# ------------------------------
 def test_attention_mask(default_config):
     attention = BoringAttention(default_config)
     x = torch.randn(2, 10, 512)
@@ -47,6 +59,10 @@ def test_cross_attention(default_config):
     output, _ = attention(x, context=context)
     assert output.shape == (2, 10, 512)
 
+
+# ------------------------------
+# Feature Tests
+# ------------------------------
 def test_num_mem_kv():
     config = AttentionConfig(
         d_model=512,
@@ -86,3 +102,6 @@ def test_different_attention_types():
         x = torch.randn(2, 10, 512)
         output, _ = attention(x)
         assert output.shape == (2, 10, 512)
+
+
+# import IPython; IPython.embed()

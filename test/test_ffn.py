@@ -88,13 +88,11 @@ def test_glu_activation(glu_config):
     ffn = BoringFeedForward(glu_config)
     assert isinstance(ffn.net[0], ffn.glu.__class__)
 
-
 def test_glu_activation_types(glu_config):
     ffn = BoringFeedForward(glu_config)
     x = torch.randn(2, 10, 512)
     output = ffn(x)
     assert output.shape == (2, 10, 512)
-
 
 def test_glu_no_bias():
     config = FeedForwardConfig(
@@ -111,5 +109,6 @@ def test_glu_no_bias():
     if activation_type != ActivationType.GLU:
         assert ffn.net[0][0].bias is None
     assert ffn.net[-1].bias is None
+
 
 # import IPython; IPython.embed()

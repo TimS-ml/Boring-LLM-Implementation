@@ -20,13 +20,6 @@ from einops import (
 )
 from typing import Optional, Tuple, Union, List
 
-from boring_utils.utils import cprint
-from boring_utils.helpers import DEBUG
-from boring_utils.nn_utils import (
-    default,
-    exists,
-    max_neg_value
-)
 from boring_nn.attention.core import AttentionFactory, AttentionConfig
 from boring_nn.attention.core import (
     PositionalEncoding,
@@ -35,6 +28,13 @@ from boring_nn.attention.core import (
     QKNormalization,
     MemoryKeyValue,
 )
+from boring_utils.nn_utils import (
+    default,
+    exists,
+    max_neg_value
+)
+from boring_utils.utils import cprint
+from boring_utils.helpers import DEBUG
 
 
 class ComputeAttention:
