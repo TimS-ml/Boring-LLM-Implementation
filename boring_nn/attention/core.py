@@ -23,29 +23,29 @@ class AttentionType(Enum):
 
 
 class AttentionTypeConfig(BaseModel):
-    type: AttentionType = Field(AttentionType.SOFTMAX, description="Type of attention mechanism")
-    sparse_topk: int    = Field(10,                    description="Top-k value for sparse attention")
+    type: AttentionType = Field(default=AttentionType.SOFTMAX, description="Type of attention mechanism")
+    sparse_topk: int    = Field(default=10,                    description="Top-k value for sparse attention")
 
 
 class QKNormConfig(BaseModel):
-    enabled: bool  = Field(False, description="Whether to enable QK normalization")
-    groups: int    = Field(1,     description="Number of groups for QK normalization")
-    scale: float   = Field(10.0,  description="Scale factor for QK normalization")
+    enabled: bool  = Field(default=False, description="Whether to enable QK normalization")
+    groups: int    = Field(default=1,     description="Number of groups for QK normalization")
+    scale: float   = Field(default=10.0,  description="Scale factor for QK normalization")
 
 
 class AttentionConfig(BaseConfig):
     # basic
-    dim_head: Optional[int]         = Field(64,    description="Dimension of each attention head")
-    num_heads: Optional[int]        = Field(8,     description="Number of attention heads")
-    causal: Optional[bool]          = Field(False, description="Whether to apply a causal mask to attention weights")
-    bias: Optional[bool]            = Field(False, description="Whether to use bias in qkv linear projections")
+    dim_head: Optional[int]         = Field(default=64,    description="Dimension of each attention head")
+    num_heads: Optional[int]        = Field(default=8,     description="Number of attention heads")
+    causal: Optional[bool]          = Field(default=False, description="Whether to apply a causal mask to attention weights")
+    bias: Optional[bool]            = Field(default=False, description="Whether to use bias in qkv linear projections")
 
     # advanced
-    num_mem_kv: Optional[int]       = Field(0,     description="Number of memory key/value pairs, concated to the input kv")
-    talking_heads: Optional[bool]   = Field(False, description="Learned linear projections before and after the softmax")
-    attn_on_attn: Optional[bool]    = Field(False, description="Modified Attention-on-attention mechanism")
-    flash_attention: Optional[bool] = Field(False, description="Kernelized attention mechanism")
-    rotary_pos_emb: Optional[bool]  = Field(False, description="RoPE positional embeddings")
+    num_mem_kv: Optional[int]       = Field(default=0,     description="Number of memory key/value pairs, concated to the input kv")
+    talking_heads: Optional[bool]   = Field(default=False, description="Learned linear projections before and after the softmax")
+    attn_on_attn: Optional[bool]    = Field(default=False, description="Modified Attention-on-attention mechanism")
+    flash_attention: Optional[bool] = Field(default=False, description="Kernelized attention mechanism")
+    rotary_pos_emb: Optional[bool]  = Field(default=False, description="RoPE positional embeddings")
     attn_type_config: AttentionTypeConfig = Field(default_factory=AttentionTypeConfig, description="Attention type configuration")
     qk_norm: QKNormConfig           = Field(default_factory=QKNormConfig, description="l2 normalization of qk before softmax")
 
