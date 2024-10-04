@@ -7,7 +7,7 @@ from torch import Tensor
 from boring_llm_base.base_config import BaseConfig
 from boring_nn.attention.core import AttentionConfig, CrossAttentionConfig
 from boring_nn.ffn.core import FeedForwardConfig
-from boring_nn.attention.attn import BoringAttention
+from boring_nn.attention.main import BoringAttention
 
 
 class TransformerLayerWrapConfig(BaseConfig):

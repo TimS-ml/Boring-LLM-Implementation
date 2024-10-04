@@ -8,8 +8,9 @@ from boring_transformer.core import TransformerLayersConfig, BoringTransformerLa
 
 from boring_transformer.core import TransformerLayersConfig, TransformerLayerWrapConfig
 from boring_nn.attention.core import AttentionConfig
-from boring_nn.ffn.core import FeedForwardConfig, BoringFeedForward
-from boring_nn.attention.attn import BoringAttention
+from boring_nn.ffn.core import FeedForwardConfig
+from boring_nn.ffn.main import BoringFeedForward
+from boring_nn.attention.main import BoringAttention
 
 
 class BoringTransformerLayers(nn.Module):

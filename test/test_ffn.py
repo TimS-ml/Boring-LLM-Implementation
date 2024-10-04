@@ -2,8 +2,8 @@ import pytest
 import torch
 from boring_nn.ffn.core import (
     FeedForwardConfig, ActivationType, ActivationConfig,
-    BoringFeedForward
 )
+from boring_nn.ffn.main import BoringFeedForward
 
 # ------------------------------
 # Base Config
@@ -15,6 +15,16 @@ def default_config():
         ffn_dim=2048,
         dropout=0.1,
         activation=ActivationConfig(type=ActivationType.GELU)
+    )
+
+@pytest.fixture
+def glu_config():
+    return FeedForwardConfig(
+        d_model=512,
+        ffn_dim=2048,
+        dropout=0.1,
+        activation=ActivationConfig(use_glu=True)
+        # activation=ActivationConfig(type=ActivationType.GLU)
     )
 
 
@@ -42,28 +52,19 @@ def test_zero_init_output():
 # ------------------------------
 # Config Tests 
 # ------------------------------
-def test_glu_activation():
-    config = FeedForwardConfig(
-        d_model=512,
-        ffn_dim=2048,
-        dropout=0.1,
-        activation=ActivationConfig(type=ActivationType.GELU, use_glu=True)
-    )
-    ffn = BoringFeedForward(config)
-    assert isinstance(ffn.net[0], ffn.glu.__class__)
-
 def test_different_activation_types():
     for activation_type in ActivationType:
-        config = FeedForwardConfig(
-            d_model=512,
-            ffn_dim=2048,
-            dropout=0.1,
-            activation=ActivationConfig(type=activation_type)
-        )
-        ffn = BoringFeedForward(config)
-        x = torch.randn(2, 10, 512)
-        output = ffn(x)
-        assert output.shape == (2, 10, 512)
+        if activation_type != ActivationType.GLU:
+            config = FeedForwardConfig(
+                d_model=512,
+                ffn_dim=2048,
+                dropout=0.1,
+                activation=ActivationConfig(type=activation_type)
+            )
+            ffn = BoringFeedForward(config)
+            x = torch.randn(2, 10, 512)
+            output = ffn(x)
+            assert output.shape == (2, 10, 512)
 
 def test_no_bias():
     config = FeedForwardConfig(
@@ -73,8 +74,42 @@ def test_no_bias():
         no_bias=True
     )
     ffn = BoringFeedForward(config)
-    assert ffn.net[0].bias is None
+
+    activation_type = config.activation.type
+    if activation_type != ActivationType.GLU:
+        assert ffn.net[0][0].bias is None
     assert ffn.net[-1].bias is None
 
+
+# ------------------------------
+# Config Tests (GLU)
+# ------------------------------
+def test_glu_activation(glu_config):
+    ffn = BoringFeedForward(glu_config)
+    assert isinstance(ffn.net[0], ffn.glu.__class__)
+
+
+def test_glu_activation_types(glu_config):
+    ffn = BoringFeedForward(glu_config)
+    x = torch.randn(2, 10, 512)
+    output = ffn(x)
+    assert output.shape == (2, 10, 512)
+
+
+def test_glu_no_bias():
+    config = FeedForwardConfig(
+        d_model=512,
+        ffn_dim=2048,
+        dropout=0.1,
+        activation=ActivationConfig(use_glu=True),
+        # activation=ActivationConfig(type=ActivationType.GLU),
+        no_bias=True
+    )
+    ffn = BoringFeedForward(config)
+
+    activation_type = config.activation.type
+    if activation_type != ActivationType.GLU:
+        assert ffn.net[0][0].bias is None
+    assert ffn.net[-1].bias is None
 
 # import IPython; IPython.embed()
