@@ -1,6 +1,6 @@
 # Design
 - [x] more readable config
-- [ ] add and test BaseConfig
+- [x] add and test BaseConfig
 - [ ] re-write ./cofig/ folder's pre-defined model
 - [ ] add expected shape for each Tensors
 
