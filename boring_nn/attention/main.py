@@ -4,6 +4,9 @@ Multi-head attention
   - sec 3.2
 
 Reference: x-transformers v1.0.0
+
+NOTE: einops.einsum and torch.einsum input order is different
+einops.einsum(A, B, 'ik,kj->ij') vs torch.einsum('ik,kj->ij', A, B)
 '''
 
 from pydantic import BaseModel, Field
@@ -37,8 +40,9 @@ from boring_utils.utils import cprint
 from boring_utils.helpers import DEBUG
 
 
-class ComputeAttention:
+class ComputeAttention(nn.Module):
     def __init__(self, config: AttentionConfig, scale: float, dropout: nn.Dropout):
+        super().__init__()
         self.config = config
         self.scale = scale
         self.dropout = dropout
@@ -49,7 +53,7 @@ class ComputeAttention:
         if self.config.flash_attention:
             return self._flash_attention(q, k, v, mask)
         
-        dots = einsum('b h i d, b h j d -> b h i j', q, k) * self.scale
+        dots = einsum(q, k, 'b h i d, b h j d -> b h i j') * self.scale
         if self.config.talking_heads: dots = self.talking_heads.pre_softmax(dots)
         dots = AttentionMask.apply_causal_mask(dots, self.config.causal)
         
@@ -61,7 +65,7 @@ class ComputeAttention:
         attn = self.dropout(attn)
         if self.config.talking_heads: attn = self.talking_heads.post_softmax(attn)
         
-        out = einsum('b h i j, b h j d -> b h i d', attn, v)
+        out = einsum(attn, v, 'b h i j, b h j d -> b h i d')
         return out, attn
 
     def _flash_attention(self, q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None):
