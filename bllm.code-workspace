@@ -1,0 +1,19 @@
+{
+	"folders": [
+		{
+			"path": "."
+		},
+		{
+			"path": "../../GPT/mini/lit-gpt"
+		},
+		{
+			"path": "../../GPT/mini/nanoGPT"
+		},
+		{
+			"path": "../../GPT/mini/x-transformers_latest"
+		},
+		{
+			"path": "../../GPT/mini/x-transformers_035"
+		}
+	]
+}
