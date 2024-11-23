@@ -1,7 +1,9 @@
 import pytest
 import torch
 from boring_nn.attention.main import BoringAttention
-from boring_nn.attention.core import AttentionConfig, AttentionType, AttentionTypeConfig
+from boring_nn.attention.config import (
+    AttentionConfig, AttentionType, AttentionTypeConfig
+)
 
 
 # ------------------------------
