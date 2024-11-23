@@ -1,7 +1,9 @@
 import pytest
 from pydantic import ValidationError
 from boring_nn.ffn.core import FeedForwardConfig, ActivationType, ActivationConfig
-from boring_nn.attention.core import AttentionConfig, AttentionType, AttentionTypeConfig, QKNormConfig
+from boring_nn.attention.config import (
+    AttentionConfig, AttentionType, AttentionTypeConfig, QKNormConfig
+)
 from boring_transformer.core import TransformerLayerWrapConfig, TransformerLayersConfig
 from boring_llm_base.base_config import BaseConfig
 

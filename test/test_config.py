@@ -1,5 +1,5 @@
 from boring_nn.ffn.core import FeedForwardConfig, ActivationType, ActivationConfig
-from boring_nn.attention.core import (
+from boring_nn.attention.config import (
     AttentionConfig, AttentionType, AttentionTypeConfig, QKNormConfig,
     CrossAttentionConfig
 )

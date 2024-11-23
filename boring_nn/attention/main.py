@@ -23,7 +23,9 @@ from einops import (
 )
 from typing import Optional, Tuple, Union, List
 
-from boring_nn.attention.core import AttentionFactory, AttentionConfig
+from boring_nn.attention.config import (
+    AttentionConfig, AttentionType
+)
 from boring_nn.attention.core import (
     PositionalEncoding,
     AttentionMask,
