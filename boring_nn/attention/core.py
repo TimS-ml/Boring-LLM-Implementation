@@ -52,8 +52,20 @@ class AttentionConfig(BaseConfig):
 
 # TODO
 class CrossAttentionConfig(AttentionConfig):
-    # Any cross-attention specific fields can go here
-    pass
+    dim_context: Optional[int]      = Field(default=None,  description="Context dimension, defaults to same as input dim")
+    shared_kv: bool                 = Field(default=False, description="Share key/value projections for memory efficiency")
+    one_kv_head: bool               = Field(default=False, description="Use single head for key/values")
+    kv_heads: Optional[int]         = Field(default=None,  description="Number of key/value heads, defaults to same as query heads")
+    value_dim_head: Optional[int]   = Field(default=None,  description="Dimension of value heads, defaults to same as key dim")
+    
+    gate_values: bool               = Field(default=False, description="Use gating for aggregated values (from AlphaFold2)")
+    gate_value_heads: bool          = Field(default=False, description="Per head gating of output values")
+    swiglu_values: bool             = Field(default=False, description="Use SwiGLU activation for value gating")
+    tensor_product: bool            = Field(default=False, description="Use tensor product attention")
+    add_zero_kv: bool               = Field(default=False, description="Add zero attention key/value pair")
+
+    class Config:
+        validate_assignment = True
 
 
 class AttentionStrategy(nn.Module):
