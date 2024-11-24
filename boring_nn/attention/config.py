@@ -25,7 +25,9 @@ class AttentionConfig(BaseConfig):
     attn_on_attn: Optional[bool]    = Field(default=False, description="Modified Attention-on-attention mechanism")
     flash_attention: Optional[bool] = Field(default=False, description="Kernelized attention mechanism")
     rotary_pos_emb: Optional[bool]  = Field(default=False, description="RoPE positional embeddings")
+    n_query_groups: Optional[int]   = Field(default=None,  description="Number of query groups for grouped-query attention")
 
+    # attention type
     qk_norm: QKNormConfig           = Field(default_factory=QKNormConfig, description="l2 normalization of qk before softmax")
 
     attention_type: Literal[

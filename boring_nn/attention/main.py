@@ -24,7 +24,8 @@ from einops import (
 from typing import Optional, Tuple, Union, List
 
 from boring_nn.attention.config import (
-    AttentionConfig
+    AttentionConfig, 
+    CrossAttentionConfig
 )
 from boring_nn.attention.core import (
     PositionalEncoding,

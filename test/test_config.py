@@ -1,11 +1,14 @@
 from boring_nn.ffn.core import FeedForwardConfig, ActivationType, ActivationConfig
+from boring_llm_base.base_config import BaseConfig
 from boring_nn.attention.config import (
-    AttentionConfig, AttentionType, AttentionTypeConfig, QKNormConfig,
-    CrossAttentionConfig
+    AttentionConfig,
+    CrossAttentionConfig,
+    QKNormConfig,
 )
 from boring_transformer.core import TransformerLayerWrapConfig, TransformerLayersConfig
-from boring_llm_base.base_config import BaseConfig
 
+
+# TODO: Update this after the implementation of the new configs
 
 # ------------------------------
 # Base Config
@@ -47,28 +50,18 @@ def test_qk_norm_config():
     assert config.groups == 1
     assert config.scale == 10.0
 
-def test_attention_type_config():
-    config = AttentionTypeConfig()
-    assert config.type == AttentionType.SOFTMAX
-    assert config.sparse_topk == 10
-
 def test_attention_config():
     config = AttentionConfig()
     assert config.dim_head == 64
     assert config.num_heads == 8
     assert config.causal == False
     assert config.bias == False
-    assert isinstance(config.attn_type_config, AttentionTypeConfig)
+    # assert isinstance(config.attn_type_config, AttentionTypeConfig)
     assert isinstance(config.qk_norm, QKNormConfig)
 
 def test_attention_config_flash_attention():
     config = AttentionConfig(flash_attention=True)
     assert config.flash_attention == True
-
-def test_attention_config_attention_types():
-    for attention_type in AttentionType:
-        config = AttentionConfig(attn_type_config=AttentionTypeConfig(type=attention_type))
-        assert config.attn_type_config.type == attention_type
 
 
 # ------------------------------

@@ -11,7 +11,8 @@ from einops import (
 )
 
 from boring_nn.attention.config import (
-    AttentionConfig, AttentionType
+    AttentionConfig, 
+    CrossAttentionConfig
 )
 
 class AttentionStrategy(nn.Module):
