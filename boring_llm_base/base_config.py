@@ -19,6 +19,7 @@ class BoringLLM:
         return cls(config=model_config)
 """
 
+from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import Any
 from copy import deepcopy
@@ -73,17 +74,27 @@ class BaseConfig(BaseModel):
         return cls(**nested_config)
 
     @classmethod
-    def from_file(cls, path: str) -> "BaseConfig":
+    def from_file(cls, path: str, config_key: str = "base_config", **kwargs: Any) -> "BaseConfig":
         """Load from config file"""
         import yaml
         with open(path) as f:
-            config_dict = yaml.safe_load(f)
-        return cls(**config_dict)
+            file_kwargs = yaml.safe_load(f)
+            if file_kwargs is None:
+                raise ValueError(f"{path} is empty which is likely unexpected.")
+        
+        if config_key in file_kwargs:
+            nested_config = file_kwargs[config_key]
+            nested_config.update(kwargs)
+            return cls(**nested_config)
+        else:
+            file_kwargs.update(kwargs)
+            return cls(**file_kwargs)
 
-    @classmethod 
-    def from_checkpoint(cls, checkpoint_dir: str) -> "BaseConfig":
+    @classmethod
+    def from_checkpoint(cls, path: Path, **kwargs: Any) -> "BaseConfig":
         """Load config from checkpoint directory"""
-        from pathlib import Path
-        config_path = Path(checkpoint_dir) / "config.yaml"
-        return cls.from_file(config_path)
-
+        if (config_path := path / "config.yaml").is_file():
+            return cls.from_file(config_path, **kwargs)
+        if (model_name := path.name) in name_to_config:
+            return cls.from_name(model_name, **kwargs)
+        raise FileNotFoundError(f"For {str(path)!r} neither 'config.yaml' nor matching config exists.")
