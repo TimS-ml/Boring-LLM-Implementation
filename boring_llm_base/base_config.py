@@ -1,26 +1,60 @@
-from enum import Enum
+"""
+TODO: I want to keep the current config hierarchy, but also want to load all configs at once.
+Potential way to achieve this:
+
+class BoringLLM:
+    @classmethod
+    def from_pretrained(cls, name: str, **kwargs):
+        base_config = BaseConfig.from_name(name, config_key="base_config")
+        attn_config = AttentionConfig.from_name(name, config_key="attention_config")
+        ffn_config = FFNConfig.from_name(name, config_key="ffn_config")
+        # ... other configs
+
+        model_config = {
+            "base": base_config,
+            "attention": attn_config,
+            # ... other configs
+        }
+
+        return cls(config=model_config)
+"""
+
 from pydantic import BaseModel, Field
-from typing import Optional, Tuple, Type, Any, Dict, Self, List
+from typing import Any
 from copy import deepcopy
 
 from boring_llm_base.model_configs import MODEL_CONFIGS
-
 name_to_config = {config["name"]: config for config in MODEL_CONFIGS}
 
+
 class BaseConfig(BaseModel):
+    """
+    Usage:
+        config = BaseConfig.from_name("microsoft/phi-2")  # nested config is supported
+        config = BaseConfig.from_name("microsoft/phi-2", config_key="attention_config")  # load attention config only
+        config = BaseConfig.from_name("phi-2", dropout=0.2)  # override dropout rate
+        config = BaseConfig.from_file("config.yaml")  # load from yaml file
+        config = BaseConfig.from_checkpoint("checkpoints/model-v1")  # load from checkpoint dir
+    """
     d_model: int                    = Field(default=512,   description="Input and output dim")
     num_tokens: int                 = Field(default=20000, description="Tokenizer's vocab size")
     dropout: float                  = Field(default=0.1,   description="Global dropout rate")
 
     @classmethod
-    def from_name(cls, name: str, **kwargs: Any) -> "BaseConfig":
-        """Create config object from predefined config name"""
+    def from_name(cls, name: str, config_key: str = "base_config", **kwargs: Any) -> "BaseConfig":
+        """
+        Create config object from predefined config name
+        
+        Args:
+            name: Model name (e.g. "microsoft/phi-2")
+            config_key: Which nested config to load (e.g. "base_config", "attention_config")
+            **kwargs: Additional overrides
+        """
         if name not in name_to_config:
-            # Search hf_config
             try:
                 conf_dict = next(
                     config for config in MODEL_CONFIGS
-                    if name == config["hf_config"]["name"] 
+                    if name == config["hf_config"]["name"]
                     or config["hf_config"]["org"] + "/" + config["hf_config"]["name"] == name
                 )
             except StopIteration:
@@ -28,11 +62,15 @@ class BaseConfig(BaseModel):
         else:
             conf_dict = name_to_config[name]
 
-        # Create config object
-        conf_dict = deepcopy(conf_dict)
-        # Update with any additional kwargs
-        conf_dict.update(kwargs)
-        return cls(**conf_dict)
+        if config_key in conf_dict:
+            nested_config = conf_dict[config_key]
+        else:
+            # we can still use the whole config dict as the nested config
+            nested_config = conf_dict
+            
+        nested_config = deepcopy(nested_config)
+        nested_config.update(kwargs)
+        return cls(**nested_config)
 
     @classmethod
     def from_file(cls, path: str) -> "BaseConfig":
