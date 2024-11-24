@@ -2,6 +2,7 @@ from typing import Any, Dict, List
 
 
 # TODO: Update model params to match the boring llm's config settings
+# TODO: Test nested config
 MODEL_CONFIGS: List[Dict[str, Any]] = []
 
 llama_3 = [
@@ -9,42 +10,56 @@ llama_3 = [
     dict(
         name="Llama-3.2-1B{}",
         hf_config=dict(org="meta-llama", name="Llama-3.2-1B{}"),
+        base_config=dict(
+            d_model=2048,
+            num_tokens=128000,
+            dropout=0.1
+        ),
+        attention_config=dict(
+            dim_head=64,
+            num_heads=32,
+            n_query_groups=8,
+            rotary_percentage=1.0,
+            bias=False
+        ),
+        ffn_config=dict(
+            mlp_class_name="LLaMAMLP",
+            intermediate_size=8192,
+            bias=False
+        ),
         block_size=131072,
-        vocab_size=128000,
         padded_vocab_size=128256,
         n_layer=16,
-        n_embd=2048,
-        n_head=32,
-        n_query_groups=8,
-        rotary_percentage=1.0,
         parallel_residual=False,
-        bias=False,
         norm_class_name="RMSNorm",
-        mlp_class_name="LLaMAMLP",
-        intermediate_size=8192,
         rope_base=500000,
-        rope_adjustments=dict(factor=32.0, low_freq_factor=1.0, high_freq_factor=4.0, original_max_seq_len=8192)
+        rope_adjustments=dict(
+            factor=32.0,
+            low_freq_factor=1.0,
+            high_freq_factor=4.0,
+            original_max_seq_len=8192
+        )
     ),
-    # https://huggingface.co/meta-llama/Llama-3.2-3B/blob/main/config.json
-    dict(
-        name="Llama-3.2-3B{}",
-        hf_config=dict(org="meta-llama", name="Llama-3.2-3B{}"),
-        block_size=131072,
-        vocab_size=128000,
-        padded_vocab_size=128256,
-        n_layer=28,
-        n_embd=3072,
-        n_head=24,
-        n_query_groups=8,
-        rotary_percentage=1.0,
-        parallel_residual=False,
-        bias=False,
-        norm_class_name="RMSNorm",
-        mlp_class_name="LLaMAMLP",
-        intermediate_size=8192,
-        rope_base=500000,
-        rope_adjustments=dict(factor=32.0, low_freq_factor=1.0, high_freq_factor=4.0, original_max_seq_len=8192)
-    ),
+    # # https://huggingface.co/meta-llama/Llama-3.2-3B/blob/main/config.json
+    # dict(
+    #     name="Llama-3.2-3B{}",
+    #     hf_config=dict(org="meta-llama", name="Llama-3.2-3B{}"),
+    #     block_size=131072,
+    #     vocab_size=128000,
+    #     padded_vocab_size=128256,
+    #     n_layer=28,
+    #     n_embd=3072,
+    #     n_head=24,
+    #     n_query_groups=8,
+    #     rotary_percentage=1.0,
+    #     parallel_residual=False,
+    #     bias=False,
+    #     norm_class_name="RMSNorm",
+    #     mlp_class_name="LLaMAMLP",
+    #     intermediate_size=8192,
+    #     rope_base=500000,
+    #     rope_adjustments=dict(factor=32.0, low_freq_factor=1.0, high_freq_factor=4.0, original_max_seq_len=8192)
+    # ),
 ]
 MODEL_CONFIGS.extend(llama_3)
 
