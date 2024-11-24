@@ -24,7 +24,7 @@ from einops import (
 from typing import Optional, Tuple, Union, List
 
 from boring_nn.attention.config import (
-    AttentionConfig, AttentionType
+    AttentionConfig
 )
 from boring_nn.attention.core import (
     PositionalEncoding,
@@ -48,7 +48,7 @@ class ComputeAttention(nn.Module):
         self.config = config
         self.scale = scale
         self.dropout = dropout
-        self.attention_strategy = AttentionFactory.get_strategy(config)
+        self.attention_strategy = config.attention_strategy_class()
         if config.talking_heads: self.talking_heads = TalkingHeads(config.num_heads)
 
     def forward(self, q: Tensor, k: Tensor, v: Tensor, mask: Optional[Tensor] = None):

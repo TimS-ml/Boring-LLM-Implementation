@@ -50,16 +50,16 @@ class TopKStrategy(AttentionStrategy):
         return qk_dots.masked_fill(mask, float('-inf')).softmax(dim=-1)
 
 
-class AttentionFactory:
-    @staticmethod
-    def get_strategy(config: AttentionConfig) -> AttentionStrategy:
-        attn_type = config.attn_type_config.type
-        if attn_type == AttentionType.ENTMAX15:
-            return Entmax15Strategy()
-        elif attn_type == AttentionType.TOPK:
-            return TopKStrategy(config.attn_type_config.sparse_topk)
-        else:
-            return SoftmaxStrategy()
+# class AttentionFactory:
+#     @staticmethod
+#     def get_strategy(config: AttentionConfig) -> AttentionStrategy:
+#         attn_type = config.attn_type_config.type
+#         if attn_type == AttentionType.ENTMAX15:
+#             return Entmax15Strategy()
+#         elif attn_type == AttentionType.TOPK:
+#             return TopKStrategy(config.attn_type_config.sparse_topk)
+#         else:
+#             return SoftmaxStrategy()
 
 
 class PositionalEncoding:

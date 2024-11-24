@@ -1,19 +1,9 @@
-from typing import Optional, Tuple
+from typing import Type, Optional, Tuple, Literal
+from functools import partial
 from enum import Enum
 from pydantic import BaseModel, Field
 
 from boring_llm_base.base_config import BaseConfig
-
-
-class AttentionType(Enum):
-    SOFTMAX = "softmax"
-    ENTMAX15 = "entmax15"  # Sparse softmax, potentially improving interpretability
-    TOPK = "topk"          # If set, use top-k sparse attention and sets the rest to zero
-
-
-class AttentionTypeConfig(BaseModel):
-    type: AttentionType = Field(default=AttentionType.SOFTMAX, description="Type of attention mechanism")
-    sparse_topk: int    = Field(default=10,                    description="Top-k value for sparse attention")
 
 
 class QKNormConfig(BaseModel):
@@ -24,10 +14,10 @@ class QKNormConfig(BaseModel):
 
 class AttentionConfig(BaseConfig):
     # basic
-    dim_head: Optional[int]         = Field(default=64,    description="Dimension of each attention head")
-    num_heads: Optional[int]        = Field(default=8,     description="Number of attention heads")
-    causal: Optional[bool]          = Field(default=False, description="Whether to apply a causal mask to attention weights")
-    bias: Optional[bool]            = Field(default=False, description="Whether to use bias in qkv linear projections")
+    dim_head: int                   = Field(default=64,    description="Dimension of each attention head")
+    num_heads: int                  = Field(default=8,     description="Number of attention heads")
+    causal: bool                    = Field(default=False, description="Whether to apply a causal mask to attention weights")
+    bias: bool                      = Field(default=False, description="Whether to use bias in qkv linear projections")
 
     # advanced
     num_mem_kv: Optional[int]       = Field(default=0,     description="Number of memory key/value pairs, concated to the input kv")
@@ -35,8 +25,31 @@ class AttentionConfig(BaseConfig):
     attn_on_attn: Optional[bool]    = Field(default=False, description="Modified Attention-on-attention mechanism")
     flash_attention: Optional[bool] = Field(default=False, description="Kernelized attention mechanism")
     rotary_pos_emb: Optional[bool]  = Field(default=False, description="RoPE positional embeddings")
-    attn_type_config: AttentionTypeConfig = Field(default_factory=AttentionTypeConfig, description="Attention type configuration")
+
     qk_norm: QKNormConfig           = Field(default_factory=QKNormConfig, description="l2 normalization of qk before softmax")
+
+    attention_type: Literal[
+            "SoftmaxStrategy",   # The default attention mechanism
+            "Entmax15Strategy",  # Sparse softmax, potentially improving interpretability
+            "TopKStrategy"       # If set, use top-k sparse attention and sets the rest to zero
+        ] = Field(
+        default="SoftmaxStrategy",
+        description="Type of attention mechanism"
+    )
+    sparse_topk: int                = Field(default=10,   description="attention_type TopKStrategy's Top-k value for sparse attention")
+
+    @property
+    def attention_strategy_class(self) -> Type:
+        """
+        Maps attention_type string to actual attention function
+        Inspired by lit-gpt's Config.norm_class
+        """
+        import boring_nn.attention.core
+        
+        if self.attention_type == "TopKStrategy":
+            return partial(boring_nn.attention.core.TopKStrategy, topk=self.sparse_topk)
+            
+        return getattr(boring_nn.attention.core, self.attention_type)
 
 
 # TODO
