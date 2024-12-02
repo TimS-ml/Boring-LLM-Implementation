@@ -32,12 +32,10 @@ class TestSimpleAttention:
         B, T, C = test_params[:3]
         q = k = v = sample_inputs
         
-        # 测试带mask的attention
         output, weights = SimpleScaledDotProductAttention(q, k, v, attn_mask=casual_mask)
         assert output.shape == (B, T, C)
         assert weights.shape == (B, T, T)
         
-        # 测试is_causal=True
         output, weights = SimpleScaledDotProductAttention(q, k, v, is_causal=True)
         assert output.shape == (B, T, C)
         assert weights.shape == (B, T, T)
@@ -93,7 +91,7 @@ class TestMultiHeadAttention:
         q = torch.randn(B, T_DEC, C)
         k = v = torch.randn(B, T_ENC, C)
         
-        # 测试2D mask
+        # 2d mask
         tril = torch.tril(torch.ones(T_DEC, T_ENC))
         mask_2d = tril.float().masked_fill(tril == 0, float('-inf'))
         
@@ -103,7 +101,7 @@ class TestMultiHeadAttention:
         assert output.shape == (B, T_DEC, C)
         assert weights.shape == (B, HEAD_SIZE, T_DEC, T_ENC)
         
-        # 测试3D mask
+        # 3d mask
         mask_3d = mask_2d.expand(B, T_DEC, T_ENC)
         output, weights = mha(q, k, v, attn_mask=mask_3d)
         
