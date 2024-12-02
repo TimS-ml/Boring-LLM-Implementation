@@ -28,15 +28,18 @@ from boring_utils.helpers import DEBUG
 
 from torch import Tensor
 from typing import Optional, Tuple, Union, List
+from jaxtyping import Float, Bool
 
 
-def SimpleScaledDotProductAttention(query: Tensor,
-                                    key: Tensor,
-                                    value: Tensor,
-                                    dropout: Optional[float] = None,
-                                    attn_mask: Optional[Tensor] = None,
-                                    is_causal: bool = False,
-                                    d_k: int = 0) -> tuple[Tensor, Tensor]:
+def SimpleScaledDotProductAttention(
+    query: Float[Tensor, "batch seq_q dim"],
+    key: Float[Tensor, "batch seq_k dim"],
+    value: Float[Tensor, "batch seq_k dim"],
+    dropout: Optional[float] = None,
+    attn_mask: Optional[Union[Bool[Tensor, "seq_q seq_k"], Float[Tensor, "seq_q seq_k"]]] = None,
+    is_causal: bool = False,
+    d_k: int = 0
+) -> Tuple[Float[Tensor, "batch seq_q dim"], Float[Tensor, "batch seq_q seq_k"]]:
     '''
     Scaled Dot-Product Attention
 
@@ -117,12 +120,13 @@ class ScaledDotProductAttention(nn.Module):
 
         self.d_k = d_k
 
-    def forward(self,
-                query: Tensor,
-                key: Tensor,
-                value: Tensor,
-                attn_mask: Optional[Tensor] = None
-        ) -> tuple[Tensor, Tensor]:
+    def forward(
+        self,
+        query: Float[Tensor, "batch seq_q dim"],
+        key: Float[Tensor, "batch seq_k dim"],
+        value: Float[Tensor, "batch seq_k dim"],
+        attn_mask: Optional[Union[Bool[Tensor, "seq_q seq_k"], Float[Tensor, "seq_q seq_k"]]] = None
+    ) -> Tuple[Float[Tensor, "batch seq_q dim"], Float[Tensor, "batch seq_q seq_k"]]:
 
         # calculate the scaling factor
         if self.d_k == 0:
@@ -166,12 +170,13 @@ class MultiHeadAttention(nn.Module):
       [batch_size, seq_len, d_model]
     '''
 
-    def __init__(self,
-                 d_model: int = 512,
-                 num_heads: int = 8,
-                 dropout: Optional[float] = None,
-                 bias: Optional[bool] = False
-                 ):
+    def __init__(
+        self,
+        d_model: int = 512,
+        num_heads: int = 8,
+        dropout: Optional[float] = None,
+        bias: Optional[bool] = False
+    ):
         super().__init__()
         assert d_model % num_heads == 0, "d_model % num_heads should be zero."
 
@@ -189,7 +194,10 @@ class MultiHeadAttention(nn.Module):
         else:
             self.dropout = None
     
-    def transpose_qkv(self, x):
+    def transpose_qkv(
+        self,
+        x: Float[Tensor, "batch seq_len dim_model"]
+    ) -> Float[Tensor, "batch num_heads seq_len d_head"]:
         '''
         input: 
           [batch_size, seq_len, d_model]
@@ -208,7 +216,10 @@ class MultiHeadAttention(nn.Module):
         x = x.permute(0, 2, 1, 3)
         return x.reshape(-1, x.shape[2], x.shape[3])
 
-    def transpose_output(self, x):
+    def transpose_output(
+        self,
+        x: Float[Tensor, "batch num_heads seq_len d_head"]
+    ) -> Float[Tensor, "batch seq_len dim"]:
         '''
         reverse transpose_qkv
         '''
@@ -216,7 +227,13 @@ class MultiHeadAttention(nn.Module):
         x = x.permute(0, 2, 1, 3)
         return x.reshape(x.shape[0], x.shape[1], -1)
 
-    def prepare_mask(self, attn_mask: Optional[Tensor], query_len: int, key_len: int, batch_size: int) -> Optional[Tensor]:
+    def prepare_mask(
+        self,
+        attn_mask: Optional[Union[Bool[Tensor, "seq_q seq_k"], Float[Tensor, "seq_q seq_k"]]],
+        query_len: int,
+        key_len: int,
+        batch_size: int
+    ) -> Optional[Union[Bool[Tensor, "batch num_heads seq_q seq_k"], Float[Tensor, "batch num_heads seq_q seq_k"]]]:
         if attn_mask is None:
             return None
 
@@ -240,11 +257,13 @@ class MultiHeadAttention(nn.Module):
 
         return attn_mask
 
-    def forward(self,
-                query: Tensor,
-                key: Tensor,
-                value: Tensor,
-                attn_mask: Optional[Tensor] = None) -> tuple[Tensor, Tensor]:
+    def forward(
+        self,
+        query: Float[Tensor, "batch seq_q dim_model"],
+        key: Float[Tensor, "batch seq_k dim_model"],
+        value: Float[Tensor, "batch seq_k dim_model"],
+        attn_mask: Optional[Union[Bool[Tensor, "seq_q seq_k"], Float[Tensor, "seq_q seq_k"]]] = None
+    ) -> Tuple[Float[Tensor, "batch seq_q dim_model"], Float[Tensor, "batch num_heads seq_q seq_k"]]:
 
         # split d_model (the last dimention) into num_heads * d_head
         # batch_size, seq_len, num_heads, d_head
