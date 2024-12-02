@@ -6,12 +6,6 @@ from pydantic import BaseModel, Field
 from boring_llm_base.base_config import BaseConfig
 
 
-class QKNormConfig(BaseModel):
-    enabled: bool  = Field(default=False, description="Whether to enable QK normalization")
-    groups: int    = Field(default=1,     description="Number of groups for QK normalization")
-    scale: float   = Field(default=10.0,  description="Scale factor for QK normalization")
-
-
 class AttentionConfig(BaseConfig):
     # basic
     dim_head: int                   = Field(default=64,    description="Dimension of each attention head")
@@ -27,9 +21,12 @@ class AttentionConfig(BaseConfig):
     rotary_pos_emb: Optional[bool]  = Field(default=False, description="RoPE positional embeddings")
     n_query_groups: Optional[int]   = Field(default=None,  description="Number of query groups for grouped-query attention")
 
-    # attention type
-    qk_norm: QKNormConfig           = Field(default_factory=QKNormConfig, description="l2 normalization of qk before softmax")
+    # qk normalization: l2 normalization of qk before softmax
+    enable_qk_norm: bool  = Field(default=False, description="Whether to enable QK normalization")
+    groups: int    = Field(default=1,     description="Number of groups for QK normalization")
+    scale: float   = Field(default=10.0,  description="Scale factor for QK normalization")
 
+    # attention type: softmax, entmax, topk
     attention_type: Literal[
             "SoftmaxStrategy",   # The default attention mechanism
             "Entmax15Strategy",  # Sparse softmax, potentially improving interpretability

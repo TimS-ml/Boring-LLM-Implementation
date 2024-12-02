@@ -44,12 +44,6 @@ def test_feed_forward_config_activation_types():
 # ------------------------------
 # Attention Config
 # ------------------------------
-def test_qk_norm_config():
-    config = QKNormConfig()
-    assert config.enabled == False
-    assert config.groups == 1
-    assert config.scale == 10.0
-
 def test_attention_config():
     config = AttentionConfig()
     assert config.dim_head == 64
@@ -57,7 +51,7 @@ def test_attention_config():
     assert config.causal == False
     assert config.bias == False
     # assert isinstance(config.attn_type_config, AttentionTypeConfig)
-    assert isinstance(config.qk_norm, QKNormConfig)
+    # assert isinstance(config.qk_norm, QKNormConfig)
 
 def test_attention_config_flash_attention():
     config = AttentionConfig(flash_attention=True)
