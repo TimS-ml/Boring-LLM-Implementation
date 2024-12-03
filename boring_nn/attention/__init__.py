@@ -1,2 +1,2 @@
-from .casual import *
+from .boring import *
 from .main import BoringAttention
