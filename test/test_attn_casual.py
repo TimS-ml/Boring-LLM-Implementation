@@ -1,7 +1,7 @@
 import pytest
 import torch
 from boring_utils.utils import cprint
-from boring_nn.attention.casual import (
+from boring_nn.attention.boring import (
     SimpleScaledDotProductAttention,
     ScaledDotProductAttention,
     MultiHeadAttention
