@@ -1,9 +1,9 @@
 import pytest
 import torch
-from boring_nn.ffn.config import (
+from boring_llm.nn.ffn.config import (
     FeedForwardConfig, ActivationType, ActivationConfig,
 )
-from boring_nn.ffn.main import BoringFeedForward
+from boring_llm.nn.ffn.main import BoringFeedForward
 
 # ------------------------------
 # Base Config

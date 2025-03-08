@@ -6,7 +6,7 @@ import torch.nn.functional as F
 from torch import Tensor
 from typing import Optional, Tuple, Union, List
 
-from boring_nn.ffn.core import FeedForwardConfig, ActivationType
+from nn.ffn.core import FeedForwardConfig, ActivationType
 from boring_utils.utils import cprint
 from boring_utils.helpers import DEBUG
 

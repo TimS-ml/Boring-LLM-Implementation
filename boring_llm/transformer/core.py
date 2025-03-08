@@ -4,10 +4,10 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from boring_llm_base.base_config import BaseConfig
-from boring_nn.attention.core import AttentionConfig, CrossAttentionConfig
-from boring_nn.ffn.core import FeedForwardConfig
-from boring_nn.attention.main import BoringAttention
+from boring_llm.base.base_config import BaseConfig
+from boring_llm.nn.attention.core import AttentionConfig, CrossAttentionConfig
+from boring_llm.nn.ffn.core import FeedForwardConfig
+from boring_llm.nn.attention.main import BoringAttention
 
 
 class TransformerLayerWrapConfig(BaseConfig):

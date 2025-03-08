@@ -16,7 +16,7 @@ pip install -e .
 ```python
 import torch
 from boring_utils.utils import cprint
-from boring_nn.attention import MultiHeadAttention
+from boring_llm.nn.attention import MultiHeadAttention
 
 
 B, T, C = 4, 8, 32  # batch size, time steps (seq length), channels
@@ -36,8 +36,8 @@ cprint(output.shape)
 
 ## Complex Attention
 ```python
-from boring_nn.attention import BoringAttention 
-from boring_nn.attention.core import AttentionConfig, AttentionType
+from boring_llm.nn.attention import BoringAttention 
+from boring_llm.nn.attention.core import AttentionConfig, AttentionType
 
 # ... same as above
 
@@ -59,8 +59,8 @@ cprint(output.shape)
 ```python
 import torch
 from boring_utils.utils import cprint
-from boring_transformer.core import TransformerLayersConfig, TransformerLayerWrapConfig
-from boring_nn.attention.core import AttentionConfig, AttentionType
+from boring_llm.transformer.core import TransformerLayersConfig, TransformerLayerWrapConfig
+from boring_llm.nn.attention.core import AttentionConfig, AttentionType
 
 config = TransformerLayersConfig(
     d_model=512,

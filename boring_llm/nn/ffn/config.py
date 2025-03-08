@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 from typing import Optional
 
-from boring_llm_base.base_config import BaseConfig
+from boring_llm.base.base_config import BaseConfig
 from boring_utils.utils import cprint
 from boring_utils.helpers import DEBUG
 
