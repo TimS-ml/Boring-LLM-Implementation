@@ -1,8 +1,8 @@
 import pytest
 import torch
-from boring_transformer.transformer import BoringTransformerLayers, TransformerLayersConfig
-from boring_nn.attention.config import AttentionConfig
-from boring_nn.ffn.config import FeedForwardConfig
+from boring_llm.transformer.transformer import BoringTransformerLayers, TransformerLayersConfig
+from boring_llm.nn.attention.config import AttentionConfig
+from boring_llm.nn.ffn.config import FeedForwardConfig
 
 @pytest.fixture
 def default_config():

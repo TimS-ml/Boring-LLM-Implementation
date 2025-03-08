@@ -23,11 +23,11 @@ from einops import (
 )
 from typing import Optional, Tuple, Union, List
 
-from boring_nn.attention.config import (
+from nn.attention.config import (
     AttentionConfig, 
     CrossAttentionConfig
 )
-from boring_nn.attention.core import (
+from nn.attention.core import (
     PositionalEncoding,
     AttentionMask,
     TalkingHeads,

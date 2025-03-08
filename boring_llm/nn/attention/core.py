@@ -10,7 +10,7 @@ from einops import (
     einsum
 )
 
-from boring_nn.attention.config import (
+from nn.attention.config import (
     AttentionConfig, 
     CrossAttentionConfig
 )

@@ -1,11 +1,11 @@
-from boring_nn.ffn.core import FeedForwardConfig, ActivationType, ActivationConfig
-from boring_llm_base.base_config import BaseConfig
-from boring_nn.attention.config import (
+from boring_llm.nn.ffn.core import FeedForwardConfig, ActivationType, ActivationConfig
+from boring_llm.base.base_config import BaseConfig
+from boring_llm.nn.attention.config import (
     AttentionConfig,
     CrossAttentionConfig,
     QKNormConfig,
 )
-from boring_transformer.core import TransformerLayerWrapConfig, TransformerLayersConfig
+from boring_llm.transformer.core import TransformerLayerWrapConfig, TransformerLayersConfig
 
 
 # TODO: Update this after the implementation of the new configs

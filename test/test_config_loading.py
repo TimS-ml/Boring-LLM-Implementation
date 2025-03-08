@@ -1,6 +1,6 @@
 import pytest
-from boring_llm_base.base_config import BaseConfig
-from boring_nn.attention.config import AttentionConfig
+from boring_llm.base.base_config import BaseConfig
+from boring_llm.nn.attention.config import AttentionConfig
 from pathlib import Path
 import yaml
 

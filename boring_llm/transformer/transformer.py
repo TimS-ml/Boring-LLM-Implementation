@@ -4,13 +4,13 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from boring_transformer.core import TransformerLayersConfig, BoringTransformerLayerWrap
+from transformer.core import TransformerLayersConfig, BoringTransformerLayerWrap
 
-from boring_transformer.core import TransformerLayersConfig, TransformerLayerWrapConfig
-from boring_nn.attention.core import AttentionConfig
-from boring_nn.ffn.core import FeedForwardConfig
-from boring_nn.ffn.main import BoringFeedForward
-from boring_nn.attention.main import BoringAttention
+from transformer.core import TransformerLayersConfig, TransformerLayerWrapConfig
+from boring_llm.nn.attention.core import AttentionConfig
+from boring_llm.nn.ffn.core import FeedForwardConfig
+from boring_llm.nn.ffn.main import BoringFeedForward
+from boring_llm.nn.attention.main import BoringAttention
 
 
 class BoringTransformerLayers(nn.Module):

@@ -3,7 +3,7 @@ from functools import partial
 from enum import Enum
 from pydantic import BaseModel, Field
 
-from boring_llm_base.base_config import BaseConfig
+from boring_llm.base.base_config import BaseConfig
 
 
 class AttentionConfig(BaseConfig):
@@ -43,12 +43,12 @@ class AttentionConfig(BaseConfig):
         Maps attention_type string to actual attention function
         Inspired by lit-gpt's Config.norm_class
         """
-        import boring_nn.attention.core
+        import nn.attention.core
         
         if self.attention_type == "TopKStrategy":
-            return partial(boring_nn.attention.core.TopKStrategy, topk=self.sparse_topk)
+            return partial(nn.attention.core.TopKStrategy, topk=self.sparse_topk)
             
-        return getattr(boring_nn.attention.core, self.attention_type)
+        return getattr(nn.attention.core, self.attention_type)
 
 
 # TODO
