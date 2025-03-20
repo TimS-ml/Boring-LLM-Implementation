@@ -11,22 +11,15 @@ import torch.optim as optim
 from torch.nn import functional as F
 from torch.utils.data import DataLoader, Dataset
 
-from boring_llm.base.tiny import TinyTransformerWrapper, TinyDecoder, TinyAutoregressiveWrapper
+from boring_llm.tiny.tiny_base import TinyTransformerWrapper, TinyDecoder, TinyAutoregressiveWrapper
 from boring_utils.utils import cprint, tprint
 from boring_utils.helpers import DEBUG
 # import os; os.environ['DEBUG'] = '3'
 
 
 # constants - adjusted for 4090
-BATCH_SCALE = 2  # increased from 1
-BATCH_SIZE = 4 * BATCH_SCALE
-NUM_BATCHES = int(5e4) // BATCH_SCALE  # reduced from 1e5
-GRADIENT_ACCUMULATE_EVERY = 4 // BATCH_SCALE
-LEARNING_RATE = 1e-4 * (BATCH_SCALE ** 0.5)
-VALIDATE_EVERY = 100
-GENERATE_EVERY = 500  # reduced from 1000
-GENERATE_LENGTH = 512  # reduced from 1024
-SEQ_LEN = 512  # reduced from 1024
+from boring_llm.base.tiny_config import *
+
 BEST_VAL_LOSS = float('inf')
 RUN_NAME = f"enwik8-boring-transformer_{datetime.now().strftime('%Y%m%d_%H%M')}"
 REPO_ROOT = git.Repo(search_parent_directories=True).working_tree_dir

@@ -19,16 +19,7 @@ from boring_utils.helpers import DEBUG
 
 # %%
 # tiny configs
-NUM_TOKENS = 128    # vocab size
-BATCH_SIZE = 32
-BLOCK_SIZE = 128    # or seq_len 
-EMBEDDING_DIM = 96  # n_embd in nanoGPT
-N_HEAD = 6          # n_head in nanoGPT
-D_HEAD = EMBEDDING_DIM // N_HEAD  # 16
-N_LAYER = 2         # n_layer in nanoGPT
-FFN_MUL = 2
-DROPOUT = 0.2
-
+from boring_llm.base.tiny_config import *
 device = get_device()
 
 # %% [markdown]
