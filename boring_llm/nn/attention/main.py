@@ -43,7 +43,7 @@ from boring_utils.utils import cprint
 from boring_utils.helpers import DEBUG
 
 
-class ComputeAttention(nn.Module):
+class BoringScaleDotProductAttention(nn.Module):
     def __init__(self, config: AttentionConfig, scale: float, dropout: nn.Dropout):
         super().__init__()
         self.config = config
@@ -76,7 +76,7 @@ class ComputeAttention(nn.Module):
         pass
 
 
-class BoringAttention(nn.Module):
+class BoringMultiHeadAttention(nn.Module):
     def __init__(self, config: AttentionConfig):
         super().__init__()
         self.config = config
@@ -91,7 +91,7 @@ class BoringAttention(nn.Module):
         self.q_proj = nn.Linear(config.d_model, inner_dim, bias=config.bias)
         self.kv_proj = nn.Linear(config.d_model, inner_dim * 2, bias=config.bias)
         self.dropout = nn.Dropout(config.dropout)
-        self.compute_attention = ComputeAttention(config, self.scale, self.dropout)
+        self.compute_attention = BoringScaleDotProductAttention(config, self.scale, self.dropout)
 
         # attention-on-attention mechanism
         if config.attn_on_attn:

@@ -1,2 +1,2 @@
 from .boring import *
-from .main import BoringAttention
+from .main import BoringMultiHeadAttention

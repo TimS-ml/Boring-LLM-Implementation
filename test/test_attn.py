@@ -1,6 +1,6 @@
 import pytest
 import torch
-from boring_llm.nn.attention.main import BoringAttention
+from boring_llm.nn.attention.main import BoringMultiHeadAttention
 from boring_llm.nn.attention.config import (
     AttentionConfig, AttentionType, AttentionTypeConfig
 )
@@ -24,7 +24,7 @@ def default_config():
 # Shape Tests
 # ------------------------------
 def test_output_shape(default_config):
-    attention = BoringAttention(default_config)
+    attention = BoringMultiHeadAttention(default_config)
     x = torch.randn(2, 10, 512)
     output, _ = attention(x)
     assert output.shape == (2, 10, 512)
@@ -37,7 +37,7 @@ def test_causal_attention():
         dropout=0.1,
         causal=True
     )
-    causal_attention = BoringAttention(config)
+    causal_attention = BoringMultiHeadAttention(config)
     x = torch.randn(2, 10, 512)
     _, attn = causal_attention(x)
     assert torch.allclose(attn[:,:,-1,:-1], torch.zeros_like(attn[:,:,-1,:-1]))
@@ -47,7 +47,7 @@ def test_causal_attention():
 # Shape Tests 2
 # ------------------------------
 def test_attention_mask(default_config):
-    attention = BoringAttention(default_config)
+    attention = BoringMultiHeadAttention(default_config)
     x = torch.randn(2, 10, 512)
     mask = torch.ones(2, 10).bool()
     mask[:, 5:] = False
@@ -55,7 +55,7 @@ def test_attention_mask(default_config):
     assert torch.allclose(attn[:,:,5:], torch.zeros_like(attn[:,:,5:]))
 
 def test_cross_attention(default_config):
-    attention = BoringAttention(default_config)
+    attention = BoringMultiHeadAttention(default_config)
     x = torch.randn(2, 10, 512)
     context = torch.randn(2, 15, 512)
     output, _ = attention(x, context=context)
@@ -73,7 +73,7 @@ def test_num_mem_kv():
         dropout=0.1,
         num_mem_kv=4
     )
-    attention = BoringAttention(config)
+    attention = BoringMultiHeadAttention(config)
     x = torch.randn(2, 10, 512)
     output, _ = attention(x)
     assert output.shape == (2, 10, 512)
@@ -86,7 +86,7 @@ def test_talking_heads():
         dropout=0.1,
         talking_heads=True
     )
-    attention = BoringAttention(config)
+    attention = BoringMultiHeadAttention(config)
     x = torch.randn(2, 10, 512)
     output, _ = attention(x)
     assert output.shape == (2, 10, 512)
@@ -100,7 +100,7 @@ def test_different_attention_types():
             dropout=0.1,
             attn_type_config=AttentionTypeConfig(type=attention_type)
         )
-        attention = BoringAttention(config)
+        attention = BoringMultiHeadAttention(config)
         x = torch.randn(2, 10, 512)
         output, _ = attention(x)
         assert output.shape == (2, 10, 512)

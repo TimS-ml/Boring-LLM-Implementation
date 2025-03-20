@@ -10,7 +10,7 @@ from transformer.core import TransformerLayersConfig, TransformerLayerWrapConfig
 from boring_llm.nn.attention.core import AttentionConfig
 from boring_llm.nn.ffn.core import FeedForwardConfig
 from boring_llm.nn.ffn.main import BoringFeedForward
-from boring_llm.nn.attention.main import BoringAttention
+from boring_llm.nn.attention.main import BoringMultiHeadAttention
 
 
 class BoringTransformerLayers(nn.Module):
