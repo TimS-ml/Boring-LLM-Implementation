@@ -7,7 +7,7 @@ from torch import Tensor
 from boring_llm.base.base_config import BaseConfig
 from boring_llm.nn.attention.core import AttentionConfig, CrossAttentionConfig
 from boring_llm.nn.ffn.core import FeedForwardConfig
-from boring_llm.nn.attention.main import BoringAttention
+from boring_llm.nn.attention.main import BoringMultiHeadAttention
 
 
 class TransformerLayerWrapConfig(BaseConfig):
@@ -49,7 +49,7 @@ class BoringTransformerLayerWrap(nn.Module):
     def __init__(self, config: TransformerLayerWrapConfig):
         super().__init__()
         self.config = config
-        self.attention = BoringAttention(config.attention)
+        self.attention = BoringMultiHeadAttention(config.attention)
         self.layer_norm = nn.LayerNorm(config.attention.d_model)
         
         if config.use_ffn:

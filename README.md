@@ -36,7 +36,7 @@ cprint(output.shape)
 
 ## Complex Attention
 ```python
-from boring_llm.nn.attention import BoringAttention 
+from boring_llm.nn.attention import BoringMultiHeadAttention 
 from boring_llm.nn.attention.core import AttentionConfig, AttentionType
 
 # ... same as above
