@@ -1,6 +1,9 @@
 # 😑😑😑 Boring LLM 😑😑😑 
 
-(WIP) A simple language model that generates boring text. Implemented everything from scratch (norm layer, cuda acc, llm training).
+A simple language model that generates boring text. Inspired by [x-transformer](https://github.com/lucidrains/x-transformers).
+- Implemented everything from scratch (norm layer, cuda acc, llm training).
+- (WIP) Aggregated 40+ papers into a single transformer implementation, so that you can easily understand the whole picture. Imagine you can enable LoRA, FlashAttention, RMSNorm, Memory Transformers, etc. at the same time just by changing some configs.
+- (WIP) cuda acceleration.
 
 
 # Install
@@ -12,69 +15,64 @@ pip install -e .
 
 
 # Usage
-## Casual Attention
+## Simple Attention
 ```python
-import torch
-from boring_utils.utils import cprint
-from boring_llm.nn.attention import MultiHeadAttention
+from boring_llm.tiny.tiny_base import TinyMultiHeadAttention
 
-
-B, T, C = 4, 8, 32  # batch size, time steps (seq length), channels
-x = torch.rand(B, T, C)
-
-tril = torch.tril(torch.ones(T, T))
-mask = tril.float().masked_fill(tril == 0, float('-inf'))
-cprint(mask)
-
-# Calling the attention function
-att = MultiHeadAttention(d_model=C, num_heads=8)
-output = att(x, x, x)
-
-cprint(output.shape)
+mha = TinyMultiHeadAttention(dim=EMBEDDING_DIM, n_head=N_HEAD, d_head=D_HEAD, causal=False)
+x = torch.randn(BATCH_SIZE, BLOCK_SIZE, EMBEDDING_DIM)
+out = mha(x)
 ```
 
 
-## Complex Attention
+## (WIP) Complex Attention
 ```python
 from boring_llm.nn.attention import BoringMultiHeadAttention 
-from boring_llm.nn.attention.core import AttentionConfig, AttentionType
+from boring_llm.nn.attention.config import AttentionConfig, AttentionType
 
-# ... same as above
-
-# Calling the attention function
 cfg = AttentionConfig(
-    d_model=C,
+    d_model=EMBEDDING_DIM,
     num_mem_kv=2,       # enable memory key-value
     attn_on_attn=True,  # attention on attention
     attn_type=AttentionType.TOPK  # sparse attention
 )
-att = MultiHeadAttention(d_model=C, num_heads=8)
-output = att(x, x, x)
-
-cprint(output.shape)
+boring_mha = BoringMultiHeadAttention(cfg)
+output = boring_mha(x)
 ```
 
 
-## Transformer Block (WIP)
+## Simple Encoder-Decoder Transformer
 ```python
-import torch
-from boring_utils.utils import cprint
-from boring_llm.transformer.core import TransformerLayersConfig, TransformerLayerWrapConfig
-from boring_llm.nn.attention.core import AttentionConfig, AttentionType
+from boring_llm.tiny.tiny_base import TinyEncDecTransformer
 
-config = TransformerLayersConfig(
-    d_model=512,
-    depth=6,
-    num_heads=8,
-    causal=True,
-    layer_config=TransformerLayerWrapConfig(
-        attention=AttentionConfig(
-            dim_head=64,
-            dropout=0.1
-        ),
-        ffn_dim=2048
-    )
-)
+model = TinyEncDecTransformer(
+    dim=EMBEDDING_DIM,
+    # encoder
+    enc_num_tokens=ENC_NUM_TOKENS,
+    enc_n_layers=ENC_N_LAYER,
+    enc_n_head=ENC_N_HEAD,
+    enc_max_seq_len=BLOCK_SIZE,
+    # decoder
+    dec_num_tokens=DEC_NUM_TOKENS,
+    dec_n_layers=DEC_N_LAYER,
+    dec_n_head=DEC_N_HEAD,
+    dec_max_seq_len=BLOCK_SIZE,
+    # misc
+    tie_token_emb=False,
+    ffn_mul=FFN_MUL,
+    dropout=DROPOUT
+).to(device)
+
+# Create test inputs
+src = torch.randint(0, ENC_NUM_TOKENS, (BATCH_SIZE, BLOCK_SIZE)).to(device)
+tgt = torch.randint(0, DEC_NUM_TOKENS, (BATCH_SIZE, BLOCK_SIZE)).to(device)
+
+# Forward pass
+logits = model(src, tgt)
+
+# Test generation
+tgt_start = torch.randint(0, DEC_NUM_TOKENS, (BATCH_SIZE, 1)).to(device)
+generated = model.generate(src, tgt_start, seq_len=BLOCK_SIZE)
 ```
 
 
