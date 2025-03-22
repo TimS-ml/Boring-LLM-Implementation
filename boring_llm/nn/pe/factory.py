@@ -29,6 +29,8 @@ class PositionalEncodingFactory:
         Returns:
             A positional encoding module
         """
+        import boring_llm.nn.pe.strategies
+
         if encoding_type == 'none':
             from boring_llm.nn.pe.strategies.core import NonePositionalEncoding
             return NonePositionalEncoding(**kwargs)
