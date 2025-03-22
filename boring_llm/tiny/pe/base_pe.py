@@ -18,7 +18,7 @@ from boring_llm.tiny.tiny_base import (
 )
 
 # Import our custom PE modules
-from boring_llm.nn.pe.core import (
+from boring_llm.nn.pe.strategies.core import (
     FixedPositionalEmbedding, AbsolutePositionalEmbedding
 )
 from boring_llm.base.tiny_config import *

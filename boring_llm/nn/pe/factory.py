@@ -1,24 +1,39 @@
-from boring_llm.nn.pe.core import *
+from typing import Optional, Dict, Type
+import torch.nn as nn
+
+from boring_llm.nn.pe.base import PositionalEncoding
 
 
-class PositionalEmbeddingFactory:
-    """Factory for creating positional embedding modules"""
+class PositionalEncodingFactory:
+    """Factory for creating positional encoding modules"""
     
-    @staticmethod
-    def create(embedding_type: str, **kwargs):
+    _registry: Dict[str, Type[PositionalEncoding]] = {}
+    
+    @classmethod
+    def register(cls, name: str):
+        """Register a positional encoding implementation"""
+        def decorator(strategy_class: Type[PositionalEncoding]):
+            cls._registry[name] = strategy_class
+            return strategy_class
+        return decorator
+    
+    @classmethod
+    def create(cls, encoding_type: str, **kwargs) -> PositionalEncoding:
         """
-        Create a positional embedding module
+        Create a positional encoding module
         
         Args:
-            embedding_type: Type of positional embedding ('fixed', 'absolute')
-            **kwargs: Arguments for the specific embedding type
+            encoding_type: Type of positional encoding ('none', 'fixed', 'absolute', 'rotary', 'alibi', etc.)
+            **kwargs: Arguments for the specific encoding type
         
         Returns:
-            A positional embedding module
+            A positional encoding module
         """
-        if embedding_type == 'fixed':
-            return FixedPositionalEmbedding(**kwargs)
-        elif embedding_type == 'absolute':
-            return AbsolutePositionalEmbedding(**kwargs)
-        else:
-            raise ValueError(f"Unknown positional embedding type: {embedding_type}")
+        if encoding_type == 'none':
+            from boring_llm.nn.pe.strategies.core import NonePositionalEncoding
+            return NonePositionalEncoding(**kwargs)
+            
+        if encoding_type not in cls._registry:
+            raise ValueError(f"Unknown positional encoding type: {encoding_type}")
+            
+        return cls._registry[encoding_type](**kwargs)

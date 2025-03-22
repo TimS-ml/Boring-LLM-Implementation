@@ -6,8 +6,12 @@ from einops import rearrange
 from typing import Optional
 from boring_llm.nn.norm.core import l2norm
 
+from boring_llm.nn.pe.base import PositionalEncoding
+from boring_llm.nn.pe.factory import PositionalEncodingFactory
 
-class FixedPositionalEmbedding(nn.Module):
+
+@PositionalEncodingFactory.register("fixed")
+class FixedPositionalEncoding(PositionalEncoding):
     """
     Sinusoidal positional embeddings from the "Attention Is All You Need" paper
     """
@@ -36,7 +40,8 @@ class FixedPositionalEmbedding(nn.Module):
         return emb
 
 
-class AbsolutePositionalEmbedding(nn.Module):
+@PositionalEncodingFactory.register("absolute")
+class AbsolutePositionalEncoding(PositionalEncoding):
     """
     Learnable absolute positional embeddings
     """
@@ -69,3 +74,23 @@ class AbsolutePositionalEmbedding(nn.Module):
         pos_emb = self.emb(pos)
         pos_emb = pos_emb * self.scale
         return l2norm(pos_emb) if self.l2norm_embed else pos_emb
+
+
+class NonePositionalEncoding(PositionalEncoding):
+    """
+    No positional encoding - identity function
+    """
+    def __init__(self, **kwargs):
+        super().__init__()
+        
+    def forward(self, x: Tensor, **kwargs) -> Tensor:
+        """
+        Return input as is (no positional encoding)
+        
+        Args:
+            x: Input tensor
+            
+        Returns:
+            The input tensor unchanged
+        """
+        return x
