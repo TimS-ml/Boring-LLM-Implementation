@@ -8,6 +8,7 @@ from boring_llm.nn.norm.core import l2norm
 
 from boring_llm.nn.pe.base import PositionalEncoding
 from boring_llm.nn.pe.factory import PositionalEncodingFactory
+from boring_utils.helpers import VERBOSE
 
 
 @PositionalEncodingFactory.register("fixed")
@@ -17,6 +18,7 @@ class FixedPositionalEncoding(PositionalEncoding):
     """
     def __init__(self, dim: int, **kwargs):
         super().__init__()
+        if VERBOSE: self.__init_debug__()
         inv_freq = 1. / (10000 ** (torch.arange(0, dim, 2).float() / dim))
         self.register_buffer('inv_freq', inv_freq)
 
@@ -47,6 +49,7 @@ class AbsolutePositionalEncoding(PositionalEncoding):
     """
     def __init__(self, dim: int, max_seq_len: int, l2norm_embed: bool = False, **kwargs):
         super().__init__()
+        if VERBOSE: self.__init_debug__()
         self.scale = dim ** -0.5 if not l2norm_embed else 1.
         self.max_seq_len = max_seq_len
         self.l2norm_embed = l2norm_embed
@@ -76,12 +79,14 @@ class AbsolutePositionalEncoding(PositionalEncoding):
         return l2norm(pos_emb) if self.l2norm_embed else pos_emb
 
 
+@PositionalEncodingFactory.register("none")
 class NonePositionalEncoding(PositionalEncoding):
     """
     No positional encoding - identity function
     """
     def __init__(self, **kwargs):
         super().__init__()
+        if VERBOSE: self.__init_debug__()
         
     def forward(self, x: Tensor, **kwargs) -> Tensor:
         """

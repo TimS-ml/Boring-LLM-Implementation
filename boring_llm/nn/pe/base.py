@@ -4,8 +4,10 @@ from torch import Tensor
 from abc import ABC, abstractmethod
 from typing import Optional
 
+from boring_llm.utils.utils import PrintInitParamsMixin
 
-class PositionalEncoding(nn.Module, ABC):
+
+class PositionalEncoding(nn.Module, ABC, PrintInitParamsMixin):
     """Base abstract class for all positional encoding implementations"""
     
     @abstractmethod
