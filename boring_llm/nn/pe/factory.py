@@ -30,11 +30,6 @@ class PositionalEncodingFactory:
             A positional encoding module
         """
         import boring_llm.nn.pe.strategies
-
-        if encoding_type == 'none':
-            from boring_llm.nn.pe.strategies.core import NonePositionalEncoding
-            return NonePositionalEncoding(**kwargs)
-            
         if encoding_type not in cls._registry:
             raise ValueError(f"Unknown positional encoding type: {encoding_type}")
             

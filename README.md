@@ -78,23 +78,26 @@ config = TransformerLayersConfig(
 ```
 
 
-## Built-In DEBUG Flag
+## Built-In Flag
 ```bash
-DEBUG=1 python -m test_legacy_transformer_encoder-block
+VERBOSE=1 DEBUG=2 python boring_llm/tiny/pe/base_pe.py
 ```
 
 Will print out the more detailed and colorful information about the model like this:
 ```
-LayerNorm -> self.normalized_shape:
-torch.Size([512])
-LayerNorm -> self.elementwise_affine:
-True
-FeedForward -> self.is_gated:
-False
-FeedForward -> self.activation:
-ReLU()
-encoder_block_with_mask -> attn_mask.shape:
-torch.Size([3, 7, 7])
+********** AbsolutePositionalEncoding.__init_debug__ -> Args **********
+    dim: 96
+    max_seq_len: 128
+    l2norm_embed: False
+
+********** FixedPositionalEncoding.__init_debug__ -> Args **********
+    dim: 96
+
+********** FixedPositionalEncoding.__init_debug__ -> Kwargs **********
+    max_seq_len: 128
+    l2norm_embed: False
+
+========== test_positional_embedding_transformer -> All tests passed! ==========
 ```
 
 
