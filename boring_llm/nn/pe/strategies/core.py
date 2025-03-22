@@ -15,7 +15,7 @@ class FixedPositionalEncoding(PositionalEncoding):
     """
     Sinusoidal positional embeddings from the "Attention Is All You Need" paper
     """
-    def __init__(self, dim: int):
+    def __init__(self, dim: int, **kwargs):
         super().__init__()
         inv_freq = 1. / (10000 ** (torch.arange(0, dim, 2).float() / dim))
         self.register_buffer('inv_freq', inv_freq)
@@ -45,7 +45,7 @@ class AbsolutePositionalEncoding(PositionalEncoding):
     """
     Learnable absolute positional embeddings
     """
-    def __init__(self, dim: int, max_seq_len: int, l2norm_embed: bool = False):
+    def __init__(self, dim: int, max_seq_len: int, l2norm_embed: bool = False, **kwargs):
         super().__init__()
         self.scale = dim ** -0.5 if not l2norm_embed else 1.
         self.max_seq_len = max_seq_len

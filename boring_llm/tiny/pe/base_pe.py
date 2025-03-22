@@ -1,12 +1,9 @@
-# boring_llm/single/pe_transformer.py
 from __future__ import annotations
-from enum import Enum
-
 import torch
 from torch import nn, Tensor
 
-from typing import Optional, Tuple, Union, List, Any, Generator, Type, Callable, Literal
-from jaxtyping import Float, Bool
+from typing import Optional, Type
+from jaxtyping import Float
 
 from boring_utils.utils import get_device, cprint, tprint
 from boring_utils.helpers import DEBUG
@@ -17,17 +14,13 @@ from boring_llm.tiny.tiny_base import (
     TinyDecoder,
 )
 
-# Import our custom PE modules
-from boring_llm.nn.pe.strategies.core import (
-    FixedPositionalEmbedding, AbsolutePositionalEmbedding
-)
+# Import positional encoding components
+from boring_llm.nn.pe.config import PositionalEncodingType
+from boring_llm.nn.pe.factory import PositionalEncodingFactory
+from boring_llm.nn.pe.base import PositionalEncoding
+
 from boring_llm.base.tiny_config import *
 device = get_device()
-
-class PEType(str, Enum):
-    NONE = "none"
-    ABSOLUTE = "absolute"
-    FIXED = "fixed"
 
 
 class PositionalEmbeddingTransformerWrapper(nn.Module):
@@ -45,7 +38,7 @@ class PositionalEmbeddingTransformerWrapper(nn.Module):
             cross_attend: bool = False, 
             transform_layer: Type[TinyTransformBlock] = TinyDecoder,
             return_only_embed: bool = False,
-            pe_type: PEType = PEType.ABSOLUTE,
+            pe_type: PositionalEncodingType = PositionalEncodingType.FIXED,
             l2norm_embed: bool = False
         ):
         super().__init__()
@@ -55,14 +48,16 @@ class PositionalEmbeddingTransformerWrapper(nn.Module):
 
         # Create positional embedding based on specified type
         self.pe_type = pe_type
-        if pe_type == PEType.NONE:
+        if pe_type == PositionalEncodingType.NONE:
             self.pos_emb = None
-        elif pe_type == PEType.ABSOLUTE:
-            self.pos_emb = AbsolutePositionalEmbedding(dim, max_seq_len, l2norm_embed)
-        elif pe_type == PEType.FIXED:
-            self.pos_emb = FixedPositionalEmbedding(dim)
         else:
-            raise ValueError(f"Unknown positional embedding type: {pe_type}")
+            # Use the factory to create the appropriate positional encoding
+            self.pos_emb = PositionalEncodingFactory.create(
+                encoding_type=pe_type.value,
+                dim=dim,
+                max_seq_len=max_seq_len,
+                l2norm_embed=l2norm_embed
+            )
 
         self.transformer = transform_layer(
             dim=dim,
@@ -97,14 +92,9 @@ class PositionalEmbeddingTransformerWrapper(nn.Module):
         
         # Add positional embeddings if specified
         if self.pos_emb is not None:
-            if isinstance(self.pos_emb, AbsolutePositionalEmbedding):
-                # For absolute positional embedding
-                pos_emb = self.pos_emb(x)
-                x = x + pos_emb
-            elif isinstance(self.pos_emb, FixedPositionalEmbedding):
-                # For fixed/sinusoidal positional embedding
-                pos_emb = self.pos_emb(x)
-                x = x + pos_emb
+            # Uses the unified PositionalEncoding interface
+            pos_emb = self.pos_emb(x)
+            x = x + pos_emb
 
         # Forward through transformer
         if self.transformer.cross_attend:
@@ -126,7 +116,7 @@ def test_positional_embedding_transformer():
         d_head=D_HEAD,
         ffn_mul=FFN_MUL,
         dropout=DROPOUT,
-        pe_type=PEType.ABSOLUTE
+        pe_type=PositionalEncodingType.ABSOLUTE
     ).to(device)
     
     # Test Transformer with fixed positional embedding
@@ -139,7 +129,7 @@ def test_positional_embedding_transformer():
         d_head=D_HEAD,
         ffn_mul=FFN_MUL,
         dropout=DROPOUT,
-        pe_type=PEType.FIXED
+        pe_type=PositionalEncodingType.FIXED
     ).to(device)
     
     # Test Transformer without positional embedding
@@ -152,7 +142,7 @@ def test_positional_embedding_transformer():
         d_head=D_HEAD,
         ffn_mul=FFN_MUL,
         dropout=DROPOUT,
-        pe_type=PEType.NONE
+        pe_type=PositionalEncodingType.NONE
     ).to(device)
     
     # Create test input
@@ -175,5 +165,4 @@ def test_positional_embedding_transformer():
 
 
 if __name__ == "__main__":
-    # Run tests if DEBUG level is high enough
     if DEBUG > 1: test_positional_embedding_transformer()

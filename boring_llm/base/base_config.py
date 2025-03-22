@@ -24,7 +24,7 @@ from pydantic import BaseModel, Field
 from typing import Any
 from copy import deepcopy
 
-from base.model_configs import MODEL_CONFIGS
+from boring_llm.base.model_configs import MODEL_CONFIGS
 name_to_config = {config["name"]: config for config in MODEL_CONFIGS}
 
 

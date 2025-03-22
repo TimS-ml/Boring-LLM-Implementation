@@ -60,7 +60,7 @@ def test_Tiny_feed_forward():
     
     tprint("All tests passed!")
 
-if DEBUG > 1: test_Tiny_feed_forward()
+if DEBUG > 3: test_Tiny_feed_forward()
 
 # %% [markdown]
 # # SDPA
@@ -163,7 +163,7 @@ def test_scale_dot_product_attention():
     
     tprint("All tests passed!")
 
-if DEBUG > 1: test_scale_dot_product_attention()
+if DEBUG > 3: test_scale_dot_product_attention()
 
 # %% [markdown]
 # # MHA
@@ -227,7 +227,7 @@ def test_multi_head_attention():
     
     tprint("All tests passed!")
 
-if DEBUG > 1: test_multi_head_attention()
+if DEBUG > 3: test_multi_head_attention()
 
 # %% [markdown]
 # # Transform
@@ -390,7 +390,7 @@ def test_Tiny_transform():
     
     tprint("All tests passed!")
 
-if DEBUG > 1: 
+if DEBUG > 3: 
     test_Tiny_transform()
     test_encoder_decoder()
 
@@ -571,7 +571,7 @@ def test_Tiny_transformer_wrapper():
     
     tprint("All tests passed!")
 
-if DEBUG > 1: test_Tiny_transformer_wrapper()
+if DEBUG > 3: test_Tiny_transformer_wrapper()
 
 # %% [markdown]
 # # Tiny Transformer
@@ -716,5 +716,5 @@ def test_Tiny_enc_dec_transformer():
     
     tprint("All tests passed!")
 
-if DEBUG > 1: test_Tiny_enc_dec_transformer()
+if DEBUG > 3: test_Tiny_enc_dec_transformer()
 
