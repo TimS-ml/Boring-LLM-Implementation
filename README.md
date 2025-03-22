@@ -78,9 +78,6 @@ config = TransformerLayersConfig(
 ```
 
 
-## LLM Block (WIP)
-
-
 ## Built-In DEBUG Flag
 ```bash
 DEBUG=1 python -m test_legacy_transformer_encoder-block
@@ -101,6 +98,19 @@ torch.Size([3, 7, 7])
 ```
 
 
-# Demo Data and Preprocessing
-From nanoGPT, improved downloading for openwebtext.
-
+## File Structure
+Take pe for example, it has the following structure:
+```
+boring_llm/nn/pe/
+├── __init__.py            # Export main classes and functions
+├── base.py                # Base interfaces and abstract classes
+├── config.py              # Configuration classes using Pydantic
+├── factory.py             # Factory for creating positional encoding instances
+├── main.py                # Main PE implementation that uses strategies
+└── strategies/            # Different PE implementations
+    ├── __init__.py        # Export strategy classes
+    ├── absolute.py        # Absolute positional encoding
+    ├── fixed.py           # Fixed/sinusoidal positional encoding
+    ├── rotary.py          # RoPE (Rotary Position Embedding)
+    └── alibi.py           # ALiBi (Attention with Linear Biases)
+```
