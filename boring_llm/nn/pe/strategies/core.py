@@ -18,7 +18,7 @@ class FixedPositionalEncoding(PositionalEncoding):
     """
     def __init__(self, dim: int, **kwargs):
         super().__init__()
-        if VERBOSE: self.__init_debug__()
+        if VERBOSE: self.__print_init_args__()
         inv_freq = 1. / (10000 ** (torch.arange(0, dim, 2).float() / dim))
         self.register_buffer('inv_freq', inv_freq)
 
@@ -49,7 +49,7 @@ class AbsolutePositionalEncoding(PositionalEncoding):
     """
     def __init__(self, dim: int, max_seq_len: int, l2norm_embed: bool = False, **kwargs):
         super().__init__()
-        if VERBOSE: self.__init_debug__()
+        if VERBOSE: self.__print_init_args__()
         self.scale = dim ** -0.5 if not l2norm_embed else 1.
         self.max_seq_len = max_seq_len
         self.l2norm_embed = l2norm_embed
@@ -86,7 +86,7 @@ class NonePositionalEncoding(PositionalEncoding):
     """
     def __init__(self, **kwargs):
         super().__init__()
-        if VERBOSE: self.__init_debug__()
+        if VERBOSE: self.__print_init_args__()
         
     def forward(self, x: Tensor, **kwargs) -> Tensor:
         """

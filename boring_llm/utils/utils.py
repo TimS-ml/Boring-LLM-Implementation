@@ -1,12 +1,14 @@
 from typing import Dict, Any
 import inspect
 from boring_utils.colorprint import tprint
+import torch
+from boring_utils.utils import get_device
 
 
 class PrintInitParamsMixin:
     """A mixin that logs initialization parameters for debugging purposes"""
     
-    def __init_debug__(self):
+    def __print_init_args__(self):
         frame = inspect.currentframe().f_back
         args, _, _, local_vars = inspect.getargvalues(frame)
         
@@ -35,3 +37,23 @@ class PrintInitParamsMixin:
         args = self._init_args.copy() if hasattr(self, '_init_args') else {}
         kwargs = self._init_kwargs.copy() if hasattr(self, '_init_kwargs') else {}
         return {**args, **kwargs}
+
+
+def create_causal_mask(seq_q: int, seq_k: int, device: torch.device = get_device()):
+    """
+    Create a causal mask for attention.
+    Args:
+        seq_q: sequence length of query
+        seq_k: sequence length of key
+        device: device to create mask on
+    Returns:
+        Upper triangular boolean mask of shape (seq_q, seq_k)
+    """
+    return torch.triu(
+            torch.ones(
+                (seq_q, seq_k), 
+                device=device, 
+                dtype=torch.bool
+            ), 
+            diagonal=1
+        )
