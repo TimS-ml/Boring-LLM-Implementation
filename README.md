@@ -83,15 +83,15 @@ VERBOSE=1 DEBUG=2 python boring_llm/tiny/pe/base_pe.py
 
 Will print out the more detailed and colorful information about the model like this:
 ```
-********** AbsolutePositionalEncoding.__init_debug__ -> Args **********
+********** AbsolutePositionalEncoding.__print_init_args__ -> Args **********
     dim: 96
     max_seq_len: 128
     l2norm_embed: False
 
-********** FixedPositionalEncoding.__init_debug__ -> Args **********
+********** FixedPositionalEncoding.__print_init_args__ -> Args **********
     dim: 96
 
-********** FixedPositionalEncoding.__init_debug__ -> Kwargs **********
+********** FixedPositionalEncoding.__print_init_args__ -> Kwargs **********
     max_seq_len: 128
     l2norm_embed: False
 
