@@ -15,10 +15,7 @@ from boring_llm.tiny.tiny_base import (
 )
 
 # Import positional encoding components
-from boring_llm.nn.pe.config import PositionalEncodingType
-from boring_llm.nn.pe.factory import PositionalEncodingFactory
-from boring_llm.nn.pe.base import PositionalEncoding
-
+from boring_llm.nn.pe.factory import PositionalEncodingFactory, PositionalEncodingConfigFactory
 from boring_llm.base.tiny_config import *
 device = get_device()
 
@@ -38,7 +35,7 @@ class PositionalEmbeddingTransformerWrapper(nn.Module):
             cross_attend: bool = False, 
             transform_layer: Type[TinyTransformBlock] = TinyDecoder,
             return_only_embed: bool = False,
-            pe_type: PositionalEncodingType = PositionalEncodingType.FIXED,
+            pe_type: str = "fixed",
             l2norm_embed: bool = False
         ):
         super().__init__()
@@ -48,16 +45,17 @@ class PositionalEmbeddingTransformerWrapper(nn.Module):
 
         # Create positional embedding based on specified type
         self.pe_type = pe_type
-        if pe_type == PositionalEncodingType.NONE:
-            self.pos_emb = None
-        else:
-            # Use the factory to create the appropriate positional encoding
-            self.pos_emb = PositionalEncodingFactory.create(
-                encoding_type=pe_type.value,
-                dim=dim,
-                max_seq_len=max_seq_len,
-                l2norm_embed=l2norm_embed
-            )
+
+        pe_args = {
+            "dim": dim,
+            "max_seq_len": max_seq_len,
+        }
+
+        if pe_type == "absolute": pe_args["l2norm_embed"] = l2norm_embed
+        self.pos_emb = PositionalEncodingFactory.create(
+            encoding_type=pe_type,
+            **pe_args
+        )
 
         self.transformer = transform_layer(
             dim=dim,
@@ -116,7 +114,7 @@ def test_positional_embedding_transformer():
         d_head=D_HEAD,
         ffn_mul=FFN_MUL,
         dropout=DROPOUT,
-        pe_type=PositionalEncodingType.ABSOLUTE
+        pe_type="absolute"
     ).to(device)
     
     # Test Transformer with fixed positional embedding
@@ -129,7 +127,7 @@ def test_positional_embedding_transformer():
         d_head=D_HEAD,
         ffn_mul=FFN_MUL,
         dropout=DROPOUT,
-        pe_type=PositionalEncodingType.FIXED
+        pe_type="fixed"
     ).to(device)
     
     # Test Transformer without positional embedding
@@ -142,7 +140,7 @@ def test_positional_embedding_transformer():
         d_head=D_HEAD,
         ffn_mul=FFN_MUL,
         dropout=DROPOUT,
-        pe_type=PositionalEncodingType.NONE
+        pe_type="none"
     ).to(device)
     
     # Create test input

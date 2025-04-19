@@ -1,6 +1,6 @@
 .DS_Store
 .idea
-.code-workspace
+*.code-workspace
 .vscode
 *.bin
 *.pkl

@@ -37,7 +37,7 @@ class BaseConfig(BaseModel):
         config = BaseConfig.from_file("config.yaml")  # load from yaml file
         config = BaseConfig.from_checkpoint("checkpoints/model-v1")  # load from checkpoint dir
     """
-    d_model: int                    = Field(default=512,   description="Input and output dim")
+    dim_model: int                    = Field(default=512,   description="Input and output dim")
     num_tokens: int                 = Field(default=20000, description="Tokenizer's vocab size")
     dropout: float                  = Field(default=0.1,   description="Global dropout rate")
 
