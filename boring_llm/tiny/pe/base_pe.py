@@ -103,9 +103,10 @@ class PositionalEmbeddingTransformerWrapper(nn.Module):
         
         # Add positional embeddings if specified
         if self.pos_emb is not None:
+            pos = torch.arange(seq_len, device=x.device)
             # Uses the unified PositionalEncoding interface
-            pos_emb = self.pos_emb(x)
-            x = x + pos_emb
+            pos_emb = self.pos_emb.apply(pos=pos)
+            if pos_emb is not None: x = x + pos_emb
 
         # Forward through transformer
         if self.transformer.cross_attend:

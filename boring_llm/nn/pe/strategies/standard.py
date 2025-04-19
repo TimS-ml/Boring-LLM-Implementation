@@ -29,18 +29,17 @@ class FixedPositionalEncoding(PositionalEncoding):
         # NOTE: if we use self.inv_freq, then it won't be included in the state_dict
         self.register_buffer('inv_freq', inv_freq)
 
-    def forward(self, x: Tensor, pos: Optional[Tensor] = None, seq_dim: int = 1, offset: int = 0) -> Tensor:
+    def apply(self, pos: Tensor, offset: int = 0, **kwargs) -> Tensor:
         """
+        Apply fixed sinusoidal positional encoding
+        
         Args:
-            x: Input tensor to determine sequence length
-            pos: Optional position indices. If None, uses sequential positions
-            seq_dim: Dimension containing sequence length
+            pos: Position indices
             offset: Offset for positions
         
         Returns:
-            Positional embeddings of shape matching input
+            Positional embeddings
         """
-        if pos is None: pos = torch.arange(x.shape[seq_dim], device=x.device)
         pos = pos.type_as(self.inv_freq) + offset  # [seq_len]
         sinusoid_inp = pos.unsqueeze(-1) * self.inv_freq  # [seq_len, 1] * [dim/2] -> [seq_len, dim/2]
         emb = torch.cat((sinusoid_inp.sin(), sinusoid_inp.cos()), dim=-1)  # [seq_len, dim]
@@ -52,34 +51,24 @@ PositionalEncodingConfigFactory.register("absolute")({
 })
 @PositionalEncodingFactory.register("absolute")
 class AbsolutePositionalEncoding(PositionalEncoding):
-    """
-    Learnable absolute positional embeddings
-    """
-    def __init__(self, dim_model: int, max_seq_len: int, l2norm_embed: bool = False, **kwargs):
+    """Learnable absolute positional embeddings"""
+    def __init__(self, dim_model: int, l2norm_embed: bool = False, **kwargs):
         super().__init__()
         if VERBOSE: self.__print_init_args__()
         self.l2norm_embed = l2norm_embed
         self.scale = dim_model ** -0.5 if not l2norm_embed else 1.
-        self.max_seq_len = max_seq_len
-        self.emb = nn.Embedding(max_seq_len, dim_model)
+        self.emb = nn.Embedding(kwargs.get('max_seq_len', 1024), dim_model)
 
-    def forward(self, x: Tensor, pos: Optional[Tensor] = None, seq_start_pos: Optional[Tensor] = None) -> Tensor:
+    def apply(self, pos: Tensor, **kwargs) -> Tensor:
         """
+        Apply absolute positional encoding
+        
         Args:
-            x: Input tensor to determine sequence length
-            pos: Optional position indices. If None, uses sequential positions
-            seq_start_pos: Optional sequence start position for offset calculation
+            pos: Position indices
         
         Returns:
             Positional embeddings of shape matching input
         """
-        seq_len, device = x.shape[1], x.device
-        assert seq_len <= self.max_seq_len, f'Sequence length {seq_len} exceeds maximum sequence length {self.max_seq_len} for absolute positional embedding'
-
-        if pos is None: pos = torch.arange(seq_len, device=device)
-        if seq_start_pos is not None:
-            pos = (pos - seq_start_pos[..., None]).clamp(min=0)
-
         pos_emb = self.emb(pos)
         pos_emb = pos_emb * self.scale
         return l2norm(pos_emb) if self.l2norm_embed else pos_emb
@@ -88,21 +77,10 @@ class AbsolutePositionalEncoding(PositionalEncoding):
 PositionalEncodingConfigFactory.register("none")({})
 @PositionalEncodingFactory.register("none")
 class NonePositionalEncoding(PositionalEncoding):
-    """
-    No positional encoding - identity function
-    """
+    """No positional encoding - identity function"""
     def __init__(self, **kwargs):
         super().__init__()
         if VERBOSE: self.__print_init_args__()
         
-    def forward(self, x: Tensor, **kwargs) -> Tensor:
-        """
-        Return input as is (no positional encoding)
-        
-        Args:
-            x: Input tensor
-            
-        Returns:
-            The input tensor unchanged
-        """
-        return x
+    def apply(self, **kwargs) -> Tensor:
+        return None
