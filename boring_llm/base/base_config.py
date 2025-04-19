@@ -37,9 +37,10 @@ class BaseConfig(BaseModel):
         config = BaseConfig.from_file("config.yaml")  # load from yaml file
         config = BaseConfig.from_checkpoint("checkpoints/model-v1")  # load from checkpoint dir
     """
-    dim_model: int                    = Field(default=512,   description="Input and output dim")
-    num_tokens: int                 = Field(default=20000, description="Tokenizer's vocab size")
-    dropout: float                  = Field(default=0.1,   description="Global dropout rate")
+    dim_model: int   = Field(default=512,   description="Input and output dim")
+    max_seq_len: int = Field(default=1024,  description="Maximum sequence length")
+    num_tokens: int  = Field(default=20000, description="Tokenizer's vocab size")
+    dropout: float   = Field(default=0.1,   description="Global dropout rate")
 
     @classmethod
     def from_name(cls, name: str, config_key: str = "base_config", **kwargs: Any) -> "BaseConfig":

@@ -23,10 +23,9 @@ class PositionalEncodingConfig(BaseConfig):
 
 
 def create_pe_config(pe_type: str) -> Type[PositionalEncodingConfig]:
+    # dim_model and max_seq_len are inherited from BaseConfig
     fields = {
         "type": (Literal[pe_type], Field(default=pe_type)),
-        "max_seq_len": (int, Field(default=1024)),
-        "dim_model": (Optional[int], Field(default=None)),
     }
     
     type_fields = PositionalEncodingConfigFactory.get_config_fields(pe_type)
