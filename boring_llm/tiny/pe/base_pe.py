@@ -15,7 +15,8 @@ from boring_llm.tiny.tiny_base import (
 )
 
 # Import positional encoding components
-from boring_llm.nn.pe.factory import PositionalEncodingFactory, PositionalEncodingConfigFactory
+from boring_llm.nn.pe.factory import PositionalEncodingFactory
+from boring_llm.nn.pe.config import create_pe_config
 from boring_llm.base.tiny_config import *
 device = get_device()
 
@@ -46,15 +47,27 @@ class PositionalEmbeddingTransformerWrapper(nn.Module):
         # Create positional embedding based on specified type
         self.pe_type = pe_type
 
-        pe_args = {
-            "dim": dim,
-            "max_seq_len": max_seq_len,
-        }
+        # create config (without type check)
+        # pe_args = {
+        #     "dim_model": dim,
+        #     "max_seq_len": max_seq_len,
+        # }
+        # if pe_type == "absolute": pe_args["l2norm_embed"] = l2norm_embed
+        # self.pos_emb = PositionalEncodingFactory.create(
+        #     encoding_type=pe_type,
+        #     **pe_args
+        # )
 
-        if pe_type == "absolute": pe_args["l2norm_embed"] = l2norm_embed
+        # create config (with type check)
+        pe_args = create_pe_config(pe_type)(
+                        dim_model=dim,
+                        max_seq_len=max_seq_len,
+                    )
+        factory_args = pe_args.model_dump(exclude={"type"})
+        if pe_type == "absolute": factory_args["l2norm_embed"] = l2norm_embed
         self.pos_emb = PositionalEncodingFactory.create(
             encoding_type=pe_type,
-            **pe_args
+            **factory_args
         )
 
         self.transformer = transform_layer(
@@ -114,7 +127,8 @@ def test_positional_embedding_transformer():
         d_head=D_HEAD,
         ffn_mul=FFN_MUL,
         dropout=DROPOUT,
-        pe_type="absolute"
+        pe_type="absolute",
+        l2norm_embed=True
     ).to(device)
     
     # Test Transformer with fixed positional embedding

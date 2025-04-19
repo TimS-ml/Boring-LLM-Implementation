@@ -1,6 +1,6 @@
 from enum import Enum
 from pydantic import Field, field_validator, create_model
-from typing import Optional, Type
+from typing import Optional, Type, List, Union, Literal
 
 from boring_llm.base.base_config import BaseConfig
 from boring_utils.utils import cprint
@@ -9,29 +9,46 @@ from boring_llm.nn.ffn.factory import FeedForwardFactory, FeedForwardConfigFacto
 
 
 class ActivationType(str, Enum):
+    """Activation function type enum"""
     RELU = "relu"
     GELU = "gelu"
     SWISH = "swish"
+    SILU = "silu"  # equivalent to SWISH
     RELU_SQUARED = "relu_squared"
+    SIGMOID = "sigmoid"
+    TANH = "tanh"
 
 
 class ActivationConfig(BaseConfig):
-    type: ActivationType = Field(
+    """Activation function configuration"""
+    type: Union[ActivationType, str] = Field(
         default=ActivationType.GELU, 
-        description="Type of activation function"
+        description="Activation function type"
     )
     use_glu: bool = Field(
         default=False, 
-        description="Enable Gated Linear Unit (GLU) with activation"
+        description="Whether to use gated linear units (GLU)"
     )
     mult_bias: bool = Field(
         default=True, 
-        description="Whether to use multiplicative bias in GLU (ST-MOE's bias improvement)"
+        description="Whether to use multiplicative bias in GLU (ST-MOE bias improvement)"
     )
+    
+    # Additional activation function specific parameters can be added here
+    inplace: bool = Field(
+        default=False,
+        description="inplace parameter for PyTorch activation functions"
+    )
+    
+    def get_type_value(self) -> str:
+        """Get type value, handle enum or string type"""
+        if isinstance(self.type, str):
+            return self.type
+        return self.type.value
 
 
 class FeedForwardConfig(BaseConfig):
-    """Configuration for feed forward network"""
+    """Feed forward network configuration"""
     type: str = Field(default="normal")
     
     @field_validator('type')
@@ -52,16 +69,20 @@ class FeedForwardConfig(BaseConfig):
     )
     post_act_ln: bool = Field(
         default=False, 
-        description="Whether to use LayerNorm after activation"
+        description="Whether to use LayerNorm after activation function"
     )
     no_bias: bool = Field(
         default=False, 
-        description="Whether to remove bias from linear layers"
+        description="Whether to remove the bias of the linear layer"
     )
-    # zero_init_output: bool = Field(
-    #     default=False, 
-    #     description="Whether to initialize output layer to zero"
-    # )
+    dropout: float = Field(
+        default=0.0, 
+        description="Dropout probability"
+    )
+    zero_init_output: bool = Field(
+        default=False, 
+        description="Whether to initialize the output layer to zero"
+    )
     activation: ActivationConfig = Field(
         default_factory=ActivationConfig, 
         description="Activation function configuration"
@@ -75,6 +96,7 @@ def create_ffn_config(ffn_type: str) -> Type[FeedForwardConfig]:
         "mult_dim": (int, Field(default=4)),
         "post_act_ln": (bool, Field(default=False)),
         "no_bias": (bool, Field(default=False)),
+        "dropout": (float, Field(default=0.0)),
         "zero_init_output": (bool, Field(default=False)),
         "activation": (ActivationConfig, Field(default_factory=ActivationConfig))
     }
