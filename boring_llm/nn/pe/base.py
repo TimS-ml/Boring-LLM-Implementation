@@ -8,10 +8,12 @@ from boring_llm.utils.utils import PrintInitParamsMixin
 
 
 class PositionalEncoding(nn.Module, ABC, PrintInitParamsMixin):
-    """Base abstract class for all positional encoding implementations"""
+    """Base abstract class for all positional encoding implementations
+    NOTE: we need nn.Module to be able to use register_buffer
+    """
     
     @abstractmethod
-    def forward(self, x: Tensor, **kwargs) -> Tensor:
+    def apply(self, x: Tensor, **kwargs) -> Tensor:
         """
         Apply positional encoding to input tensor
         
