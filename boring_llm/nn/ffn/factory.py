@@ -1,21 +1,12 @@
-from typing import Dict, Type
-import torch.nn as nn
-
+from typing import Dict, Type, Any, ClassVar
+from boring_llm.base.base_factory import BaseFactory, BaseConfigFactory
 from boring_llm.nn.ffn.base import FeedForward
 
 
-class FeedForwardFactory:
+class FeedForwardFactory(BaseFactory[FeedForward]):
     """Factory for creating feed forward network modules"""
     
     _registry: Dict[str, Type[FeedForward]] = {}
-    
-    @classmethod
-    def register(cls, name: str):
-        """Register a feed forward network implementation"""
-        def decorator(strategy_class: Type[FeedForward]):
-            cls._registry[name] = strategy_class
-            return strategy_class
-        return decorator
     
     @classmethod
     def create(cls, ffn_type: str, **kwargs) -> FeedForward:
@@ -30,7 +21,10 @@ class FeedForwardFactory:
             A feed forward network module
         """
         import boring_llm.nn.ffn.strategies
-        if ffn_type not in cls._registry:
-            raise ValueError(f"Unknown feed forward network type: {ffn_type}")
-            
-        return cls._registry[ffn_type](**kwargs)
+        return super().create(ffn_type, **kwargs)
+
+
+class FeedForwardConfigFactory(BaseConfigFactory[Dict[str, Any]]):
+    """Factory for managing configuration parameters for different feed forward types"""
+    
+    _type_configs: ClassVar[Dict[str, Dict[str, Any]]] = {}

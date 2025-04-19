@@ -20,10 +20,6 @@ class PositionalEncodingConfig(BaseConfig):
         default=1024,
         description="Maximum sequence length for positional embeddings"
     )
-    # dim_model: Optional[int] = Field(
-    #     default=None,
-    #     description="Model dimension (if None, uses d_model from parent config)"
-    # )
 
 
 def create_pe_config(pe_type: str) -> Type[PositionalEncodingConfig]:
