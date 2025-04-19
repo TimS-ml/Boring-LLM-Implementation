@@ -21,11 +21,11 @@ class FixedPositionalEncoding(PositionalEncoding):
     - Even indices (2i):   $PE_{(pos, 2i)}   = \sin(pos/10000^{2i/d})$
     - Odd indices (2i+1):  $PE_{(pos, 2i+1)} = \cos(pos/10000^{2i/d})$
     """
-    def __init__(self, dim: int, **kwargs):
+    def __init__(self, dim_model: int, **kwargs):
         super().__init__()
         if VERBOSE: self.__print_init_args__()
         # [0, 2, 4, ..., dim] / dim = [0, 2/dim, 4/dim, ..., 1]
-        inv_freq = 1. / (10000 ** (torch.arange(0, dim, 2).float() / dim))  # [dim/2]
+        inv_freq = 1. / (10000 ** (torch.arange(0, dim_model, 2).float() / dim_model))  # [dim/2]
         # NOTE: if we use self.inv_freq, then it won't be included in the state_dict
         self.register_buffer('inv_freq', inv_freq)
 
@@ -55,13 +55,13 @@ class AbsolutePositionalEncoding(PositionalEncoding):
     """
     Learnable absolute positional embeddings
     """
-    def __init__(self, dim: int, max_seq_len: int, l2norm_embed: bool = False, **kwargs):
+    def __init__(self, dim_model: int, max_seq_len: int, l2norm_embed: bool = False, **kwargs):
         super().__init__()
         if VERBOSE: self.__print_init_args__()
         self.l2norm_embed = l2norm_embed
-        self.scale = dim ** -0.5 if not l2norm_embed else 1.
+        self.scale = dim_model ** -0.5 if not l2norm_embed else 1.
         self.max_seq_len = max_seq_len
-        self.emb = nn.Embedding(max_seq_len, dim)
+        self.emb = nn.Embedding(max_seq_len, dim_model)
 
     def forward(self, x: Tensor, pos: Optional[Tensor] = None, seq_start_pos: Optional[Tensor] = None) -> Tensor:
         """

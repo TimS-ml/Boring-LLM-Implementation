@@ -1,5 +1,5 @@
 from pydantic import Field, field_validator, create_model
-from typing import Optional, Type
+from typing import Optional, Type, Literal
 
 from boring_llm.base.base_config import BaseConfig
 from boring_llm.nn.pe.factory import PositionalEncodingFactory, PositionalEncodingConfigFactory
@@ -24,7 +24,7 @@ class PositionalEncodingConfig(BaseConfig):
 
 def create_pe_config(pe_type: str) -> Type[PositionalEncodingConfig]:
     fields = {
-        "type": (str, Field(default=pe_type, const=True)),
+        "type": (Literal[pe_type], Field(default=pe_type)),
         "max_seq_len": (int, Field(default=1024)),
         "dim_model": (Optional[int], Field(default=None)),
     }

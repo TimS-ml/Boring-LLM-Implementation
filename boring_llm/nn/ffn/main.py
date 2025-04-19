@@ -4,9 +4,9 @@ import torch.nn.functional as F
 # from einops import rearrange
 
 from torch import Tensor
-from typing import Optional, Tuple, Union, List, Literal
+from typing import Optional, Tuple, Union, List, Literal, Any
 
-from nn.ffn.core import FeedForwardConfig, ActivationType
+from boring_llm.nn.ffn.config import FeedForwardConfig, ActivationType, ActivationConfig
 from boring_utils.utils import cprint
 from boring_utils.helpers import DEBUG
 
@@ -14,23 +14,71 @@ from boring_llm.nn.ffn.base import FeedForward
 from boring_llm.nn.ffn.factory import FeedForwardFactory
 
 
+def get_activation(activation_type: Union[str, ActivationType], **kwargs: Any) -> nn.Module:
+    """
+    获取激活函数模块
+    
+    Args:
+        activation_type: 激活函数类型（字符串或枚举）
+        **kwargs: 激活函数的额外参数
+    
+    Returns:
+        激活函数模块
+    """
+    # 如果是枚举类型，转换为字符串
+    if isinstance(activation_type, ActivationType):
+        activation_type = activation_type.value
+    
+    # 处理内置PyTorch激活函数    
+    if activation_type == "relu":
+        return nn.ReLU(**kwargs)
+    elif activation_type == "gelu":
+        return nn.GELU(**kwargs)
+    elif activation_type == "silu" or activation_type == "swish":
+        return nn.SiLU(**kwargs)
+    elif activation_type == "sigmoid":
+        return nn.Sigmoid(**kwargs)
+    elif activation_type == "tanh":
+        return nn.Tanh(**kwargs)
+    elif activation_type == "relu_squared":
+        from boring_llm.nn.ffn.strategies.activation import ReluSquared
+        return ReluSquared()
+    else:
+        raise ValueError(f"Unknown activation type: {activation_type}")
+
+
+def get_activation_from_config(config: ActivationConfig) -> nn.Module:
+    """
+    从配置对象创建激活函数
+    
+    Args:
+        config: 激活函数配置
+        
+    Returns:
+        激活函数模块
+    """
+    activation_type = config.get_type_value()
+    kwargs = {}
+    
+    # 添加特定于激活函数的参数
+    if hasattr(config, 'inplace'):
+        kwargs['inplace'] = config.inplace
+        
+    return get_activation(activation_type, **kwargs)
+
+
 class GLU(nn.Module):
     def __init__(self, dim_in: int, dim_out: int, config: FeedForwardConfig):
         super().__init__()
-        activation_type = config.activation.type
         no_bias = config.no_bias
-        self.act = BoringFeedForward.get_activation(activation_type)
+        # 使用get_activation_from_config直接从配置创建激活函数
+        self.act = get_activation_from_config(config.activation)
         self.proj = nn.Linear(dim_in, dim_out * 2, bias=not no_bias)
         self.mult_bias = nn.Parameter(torch.ones(dim_out)) if config.activation.mult_bias else 1.
 
     def forward(self, x: Tensor) -> Tensor:
         x, gate = self.proj(x).chunk(2, dim=-1)
         return x * self.act(gate) * self.mult_bias
-
-
-class ReluSquared(nn.Module):
-    def forward(self, x: Tensor) -> Tensor:
-        return F.relu(x)**2
 
 
 class BoringFeedForward(FeedForward):
@@ -52,13 +100,16 @@ class BoringFeedForward(FeedForward):
         dim = config.d_model
         dim_out = config.ffn_dim_out or dim
         
+        # 获取激活函数类型的字符串值
+        activation_type = config.activation.get_type_value()
+        
         # Create the appropriate FFN implementation based on config
         self.ffn_strategy = FeedForwardFactory.create(
             ffn_type=ffn_type,
             dim=dim,
             dim_out=dim_out,
             mult=config.mult_dim,
-            activation_type=config.activation.type,
+            activation_type=activation_type,
             mult_bias=config.activation.mult_bias if ffn_type == "glu" else False,
             post_act_ln=config.post_act_ln,
             dropout=config.dropout,
@@ -81,14 +132,13 @@ class BoringFeedForward(FeedForward):
 
     @staticmethod
     def get_activation(activation_type: ActivationType):
-        if activation_type == ActivationType.RELU:
-            return nn.ReLU()
-        elif activation_type == ActivationType.GELU:
-            return nn.GELU()
-        elif activation_type == ActivationType.SWISH:
-            return nn.SiLU()
-        elif activation_type == ActivationType.RELU_SQUARED:
-            # return lambda x: F.relu(x)**2  # causes an error for not being a nn.Module
-            return ReluSquared()
-        else:
-            raise ValueError(f"Unsupported activation type: {activation_type}")
+        """
+        Legacy method for getting activation function (for backward compatibility)
+        
+        Args:
+            activation_type: Activation type enum
+            
+        Returns:
+            Activation function module
+        """
+        return get_activation(activation_type)

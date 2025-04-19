@@ -1,4 +1,6 @@
 from typing import Dict, Type, Any, ClassVar
+import torch.nn as nn
+
 from boring_llm.base.base_factory import BaseFactory, BaseConfigFactory
 from boring_llm.nn.ffn.base import FeedForward
 
