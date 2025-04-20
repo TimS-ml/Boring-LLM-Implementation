@@ -3,7 +3,7 @@ import torch.nn as nn
 from torch import Tensor
 from typing import Optional
 
-from boring_llm.nn.pe.base import PositionalEncoding
+from boring_llm.nn.pe.base import PositionalEncodingTransform
 from boring_llm.nn.pe.config import PositionalEncodingConfig
 from boring_llm.nn.pe.factory import PositionalEncodingFactory
 from boring_llm.nn.pe.config import create_pe_config

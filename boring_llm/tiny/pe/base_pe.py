@@ -63,7 +63,7 @@ class PositionalEmbeddingTransformerWrapper(nn.Module):
                         dim_model=dim,
                         max_seq_len=max_seq_len,
                     )
-        factory_args = pe_args.model_dump(exclude={"type"})
+        factory_args = pe_args.model_dump(exclude={"type"})  # convert pydantic model to dict for kwargs
         if pe_type == "absolute": factory_args["l2norm_embed"] = l2norm_embed
         self.pos_emb = PositionalEncodingFactory.create(
             encoding_type=pe_type,

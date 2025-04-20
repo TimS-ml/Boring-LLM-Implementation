@@ -8,14 +8,14 @@ from torch import Tensor
 from einops import rearrange
 
 from boring_llm.nn.norm.core import l2norm
-from boring_llm.nn.pe.base import PositionalEncoding
+from boring_llm.nn.pe.base import PositionalEncodingTransform
 from boring_llm.nn.pe.factory import PositionalEncodingFactory, PositionalEncodingConfigFactory
 from boring_utils.helpers import VERBOSE
 
 
 PositionalEncodingConfigFactory.register("fixed")({})
 @PositionalEncodingFactory.register("fixed")
-class FixedPositionalEncoding(PositionalEncoding):
+class FixedPositionalEncoding(PositionalEncodingTransform):
     """
     Sinusoidal positional embeddings from the "Attention Is All You Need" paper
     - Even indices (2i):   $PE_{(pos, 2i)}   = \sin(pos/10000^{2i/d})$
@@ -50,7 +50,7 @@ PositionalEncodingConfigFactory.register("absolute")({
     "l2norm_embed": (bool, Field(default=False, description="Whether to L2 normalize embeddings"))
 })
 @PositionalEncodingFactory.register("absolute")
-class AbsolutePositionalEncoding(PositionalEncoding):
+class AbsolutePositionalEncoding(PositionalEncodingTransform):
     """Learnable absolute positional embeddings"""
     def __init__(self, dim_model: int, l2norm_embed: bool = False, **kwargs):
         super().__init__()
@@ -76,7 +76,7 @@ class AbsolutePositionalEncoding(PositionalEncoding):
 
 PositionalEncodingConfigFactory.register("none")({})
 @PositionalEncodingFactory.register("none")
-class NonePositionalEncoding(PositionalEncoding):
+class NonePositionalEncoding(PositionalEncodingTransform):
     """No positional encoding - identity function"""
     def __init__(self, **kwargs):
         super().__init__()

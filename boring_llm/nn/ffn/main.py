@@ -6,82 +6,17 @@ import torch.nn.functional as F
 from torch import Tensor
 from typing import Optional, Tuple, Union, List, Literal, Any
 
-from boring_llm.nn.ffn.config import FeedForwardConfig, ActivationType, ActivationConfig
-from boring_utils.utils import cprint
+from boring_llm.nn.ffn.config import FeedForwardConfig, create_ffn_config
+from boring_llm.nn.ffn.base import FeedForwardTransform
+from boring_llm.nn.ffn.factory import FeedForwardFactory
+from boring_llm.nn.activation.config import ActivationConfig
+from boring_llm.nn.activation.main import get_activation
+
+from boring_utils.utils import cprint, tprint
 from boring_utils.helpers import DEBUG
 
-from boring_llm.nn.ffn.base import FeedForward
-from boring_llm.nn.ffn.factory import FeedForwardFactory
 
-
-def get_activation(activation_type: Union[str, ActivationType], **kwargs: Any) -> nn.Module:
-    """
-    获取激活函数模块
-    
-    Args:
-        activation_type: 激活函数类型（字符串或枚举）
-        **kwargs: 激活函数的额外参数
-    
-    Returns:
-        激活函数模块
-    """
-    # 如果是枚举类型，转换为字符串
-    if isinstance(activation_type, ActivationType):
-        activation_type = activation_type.value
-    
-    # 处理内置PyTorch激活函数    
-    if activation_type == "relu":
-        return nn.ReLU(**kwargs)
-    elif activation_type == "gelu":
-        return nn.GELU(**kwargs)
-    elif activation_type == "silu" or activation_type == "swish":
-        return nn.SiLU(**kwargs)
-    elif activation_type == "sigmoid":
-        return nn.Sigmoid(**kwargs)
-    elif activation_type == "tanh":
-        return nn.Tanh(**kwargs)
-    elif activation_type == "relu_squared":
-        from boring_llm.nn.ffn.strategies.activation import ReluSquared
-        return ReluSquared()
-    else:
-        raise ValueError(f"Unknown activation type: {activation_type}")
-
-
-def get_activation_from_config(config: ActivationConfig) -> nn.Module:
-    """
-    从配置对象创建激活函数
-    
-    Args:
-        config: 激活函数配置
-        
-    Returns:
-        激活函数模块
-    """
-    activation_type = config.get_type_value()
-    kwargs = {}
-    
-    # 添加特定于激活函数的参数
-    if hasattr(config, 'inplace'):
-        kwargs['inplace'] = config.inplace
-        
-    return get_activation(activation_type, **kwargs)
-
-
-class GLU(nn.Module):
-    def __init__(self, dim_in: int, dim_out: int, config: FeedForwardConfig):
-        super().__init__()
-        no_bias = config.no_bias
-        # 使用get_activation_from_config直接从配置创建激活函数
-        self.act = get_activation_from_config(config.activation)
-        self.proj = nn.Linear(dim_in, dim_out * 2, bias=not no_bias)
-        self.mult_bias = nn.Parameter(torch.ones(dim_out)) if config.activation.mult_bias else 1.
-
-    def forward(self, x: Tensor) -> Tensor:
-        x, gate = self.proj(x).chunk(2, dim=-1)
-        return x * self.act(gate) * self.mult_bias
-
-
-class BoringFeedForward(FeedForward):
+class BoringFeedForward(nn.Module):
     """
     Main feed-forward network module that uses strategy pattern
     to support different types of feed-forward implementations
@@ -90,55 +25,87 @@ class BoringFeedForward(FeedForward):
         super().__init__()
         self.config = config
         
-        # Determine the FFN type based on configuration
-        if config.activation.use_glu:
-            ffn_type = "glu"
-        else:
-            ffn_type = "standard"
-        
-        # Get dimensions
-        dim = config.d_model
+        dim = config.dim_model
         dim_out = config.ffn_dim_out or dim
+        mult = config.mult_dim
+        inner_dim = int(dim * mult) if config.inner_dim is None else config.inner_dim
+
+        ffn_type = config.type
+        ffn_post_type = config.post_type
         
-        # 获取激活函数类型的字符串值
-        activation_type = config.activation.get_type_value()
-        
-        # Create the appropriate FFN implementation based on config
-        self.ffn_strategy = FeedForwardFactory.create(
+        if DEBUG: cprint(config)
+        transform_args = create_ffn_config(ffn_type)(
+            dim_model=dim,
+            inner_dim=inner_dim,
+            activation=config.activation,
+            no_bias=config.no_bias
+        )
+        factory_args = transform_args.model_dump(exclude={"type", "post_type"})
+        # if ffn_type == "glu": factory_args["mult_bias"] = config.mult_bias 
+        if ffn_type == "glu" and hasattr(config, "mult_bias"):
+            factory_args["mult_bias"] = config.mult_bias
+        if DEBUG: cprint(factory_args)
+        self.ffn_transform = FeedForwardFactory.create(
             ffn_type=ffn_type,
-            dim=dim,
-            dim_out=dim_out,
-            mult=config.mult_dim,
-            activation_type=activation_type,
-            mult_bias=config.activation.mult_bias if ffn_type == "glu" else False,
-            post_act_ln=config.post_act_ln,
+            **factory_args
+        )
+        trans_dim_out = self.ffn_transform.output_dim
+        
+        post_args = create_ffn_config(ffn_post_type)(
+            dim_model=dim_out,
+            inner_dim=trans_dim_out,
             dropout=config.dropout,
+            post_act_ln=config.post_act_ln,
             no_bias=config.no_bias,
             zero_init_output=config.zero_init_output
         )
-    
+        post_factory_args = post_args.model_dump(exclude={"type", "post_type"})
+        if DEBUG: cprint(post_factory_args)
+        self.post_processor = FeedForwardFactory.create(
+            ffn_type=ffn_post_type,
+            **post_factory_args
+        )
+
     def forward(self, x: Tensor, **kwargs) -> Tensor:
         """
         Apply feed-forward transformation to input tensor
         
         Args:
             x: Input tensor of shape [batch, seq_len, dim]
-            **kwargs: Additional arguments passed to the strategy
+            **kwargs: Additional arguments passed to the transformation
             
         Returns:
             Transformed tensor
         """
-        return self.ffn_strategy(x, **kwargs)
+        transformed = self.ffn_transform.apply(x, **kwargs)
+        return self.post_processor.apply(transformed)
 
-    @staticmethod
-    def get_activation(activation_type: ActivationType):
-        """
-        Legacy method for getting activation function (for backward compatibility)
-        
-        Args:
-            activation_type: Activation type enum
-            
-        Returns:
-            Activation function module
-        """
-        return get_activation(activation_type)
+
+if __name__ == "__main__":
+    from boring_llm.base.tiny_config import *
+    
+    tprint("Standard FFN")
+    ffn_type = "standard"
+    ffn_args = create_ffn_config(ffn_type)(
+        dim_model=EMBEDDING_DIM,
+        mult_dim=4,
+        post_type="post_standard",
+        activation=nn.GELU  # using callable
+    )
+    ffn = BoringFeedForward(ffn_args)
+    x = torch.randn(2, 3, EMBEDDING_DIM)
+    y = ffn(x)
+    print(f"Standard FFN output shape: {y.shape}")
+
+    tprint("GLU FFN")
+    ffn_type = "glu"
+    ffn_args = create_ffn_config(ffn_type)(
+        dim_model=EMBEDDING_DIM,
+        mult_dim=2,
+        post_type="post_standard",
+        mult_bias=False,
+        activation="silu"  # using str
+    )
+    ffn = BoringFeedForward(ffn_args)
+    y = ffn(x)
+    print(f"GLU FFN output shape: {y.shape}") 

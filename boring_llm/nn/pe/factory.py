@@ -1,14 +1,14 @@
 from typing import Dict, Type, Any, ClassVar
 from boring_llm.base.base_factory import BaseFactory, BaseConfigFactory
-from boring_llm.nn.pe.base import PositionalEncoding
+from boring_llm.nn.pe.base import PositionalEncodingTransform
 
-class PositionalEncodingFactory(BaseFactory[PositionalEncoding]):
+class PositionalEncodingFactory(BaseFactory[PositionalEncodingTransform]):
     """Factory for creating positional encoding modules"""
     
-    _registry: Dict[str, Type[PositionalEncoding]] = {}
+    _registry: Dict[str, Type[PositionalEncodingTransform]] = {}
     
     @classmethod
-    def create(cls, encoding_type: str, **kwargs) -> PositionalEncoding:
+    def create(cls, encoding_type: str, **kwargs) -> PositionalEncodingTransform:
         """
         Create a positional encoding module
         
