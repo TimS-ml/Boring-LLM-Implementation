@@ -1,5 +1,7 @@
 # 😑😑😑 Boring LLM 😑😑😑 
 
+Inspired by [x-transformer](https://github.com/lucidrains/x-transformers) and [litgpt](https://github.com/Lightning-AI/litgpt/) and [gpt-fast](https://github.com/pytorch-labs/gpt-fast).
+
 Implemented all components from scratch (normalization layers, CUDA acceleration, LLM training pipeline).
 
 (WIP) Unified 40+ research papers into a single transformer implementation:
@@ -28,7 +30,7 @@ out = mha(x)
 ```
 
 
-## (WIP) Complex Attention
+## Complex Attention
 ```python
 from boring_llm.nn.attention import BoringMultiHeadAttention 
 from boring_llm.nn.attention.config import AttentionConfig, AttentionType
