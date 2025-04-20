@@ -1,9 +1,12 @@
 # 😑😑😑 Boring LLM 😑😑😑 
 
-A simple language model that generates boring text. Inspired by [x-transformer](https://github.com/lucidrains/x-transformers).
-- Implemented everything from scratch (norm layer, cuda acc, llm training).
-- (WIP) Aggregated 40+ papers into a single transformer implementation, so that you can easily understand the whole picture. Imagine you can enable LoRA, FlashAttention, RMSNorm, Memory Transformers, etc. at the same time just by changing some configs.
-- (WIP) cuda acceleration.
+Implemented all components from scratch (normalization layers, CUDA acceleration, LLM training pipeline).
+
+(WIP) Unified 40+ research papers into a single transformer implementation:
+- Configure multiple optimizations simultaneously (LoRA, FlashAttention, RMSNorm, Memory Transformers) through simple config changes
+- Easily modify architecture designs across 20+ mainstream LLM architectures (Deepseek, LLaMA, etc.)
+
+(WIP) Developing CUDA acceleration modules.
 
 
 # Install
