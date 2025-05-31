@@ -9,8 +9,6 @@ from typing import Optional, Tuple, Union, List, Literal, Any
 from boring_llm.nn.ffn.config import FeedForwardConfig, create_ffn_config
 from boring_llm.nn.ffn.base import FeedForwardTransform
 from boring_llm.nn.ffn.factory import FeedForwardFactory
-from boring_llm.nn.activation.config import ActivationConfig
-from boring_llm.nn.activation.main import get_activation
 
 from boring_utils.utils import cprint, tprint
 from boring_utils.helpers import DEBUG
@@ -83,6 +81,7 @@ class BoringFeedForward(nn.Module):
 
 if __name__ == "__main__":
     from boring_llm.base.tiny_config import *
+    from boring_llm.nn.activation.activation import ReluSquared
     
     tprint("Standard FFN")
     ffn_type = "standard"
@@ -90,7 +89,7 @@ if __name__ == "__main__":
         dim_model=EMBEDDING_DIM,
         mult_dim=4,
         post_type="post_standard",
-        activation=nn.GELU  # using callable
+        activation=nn.GELU()  # using callable instance
     )
     ffn = BoringFeedForward(ffn_args)
     x = torch.randn(2, 3, EMBEDDING_DIM)
@@ -104,8 +103,20 @@ if __name__ == "__main__":
         mult_dim=2,
         post_type="post_standard",
         mult_bias=False,
-        activation="silu"  # using str
+        activation=nn.SiLU()  # using callable instance
     )
     ffn = BoringFeedForward(ffn_args)
     y = ffn(x)
-    print(f"GLU FFN output shape: {y.shape}") 
+    print(f"GLU FFN output shape: {y.shape}")
+    
+    tprint("ReluSquared FFN")
+    ffn_type = "standard"
+    ffn_args = create_ffn_config(ffn_type)(
+        dim_model=EMBEDDING_DIM,
+        mult_dim=4,
+        post_type="post_standard",
+        activation=ReluSquared()  # using custom activation
+    )
+    ffn = BoringFeedForward(ffn_args)
+    y = ffn(x)
+    print(f"ReluSquared FFN output shape: {y.shape}") 

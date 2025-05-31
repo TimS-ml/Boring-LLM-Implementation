@@ -2,6 +2,7 @@
 .idea
 *.code-workspace
 .vscode
+.cursor
 *.bin
 *.pkl
 *.pt

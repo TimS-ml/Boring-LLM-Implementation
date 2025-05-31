@@ -4,8 +4,6 @@ from typing import Optional, Type, List, Union, Literal, Callable, Any
 import torch.nn as nn
 
 from boring_llm.base.base_config import BaseConfig
-from boring_llm.nn.activation.config import ActivationConfig
-from boring_llm.nn.activation.main import get_activation, get_activation_from_config
 from boring_llm.nn.ffn.factory import FeedForwardFactory, FeedForwardConfigFactory
 
 
@@ -59,9 +57,9 @@ class FeedForwardConfig(BaseConfig):
         default=False, 
         description="Whether to initialize the output layer to zero"
     )
-    activation: Union[Callable[..., Any], str]= Field(
+    activation: Callable[..., Any] = Field(
         default=nn.Identity, 
-        description="Activation function configuration"
+        description="Activation function"
     )
     # TODO:
     # layer_dropout
@@ -71,14 +69,8 @@ class FeedForwardConfig(BaseConfig):
     # sandwich_coef
 
     def model_post_init(self, __context):
-        if isinstance(self.activation, str):
-            self.activation = ActivationConfig(type=self.activation)
-            
-        if isinstance(self.activation, ActivationConfig):
-            self.activation = get_activation_from_config(self.activation)
-        
-        elif callable(self.activation) and not isinstance(self.activation, nn.Module):
-            # If a class is passed instead of an instance, instantiate it
+        # If a class is passed instead of an instance, instantiate it
+        if callable(self.activation) and not isinstance(self.activation, nn.Module):
             self.activation = self.activation()
 
 
@@ -92,7 +84,7 @@ def create_ffn_config(ffn_type: str) -> Type[FeedForwardConfig]:
         "no_bias": (bool, Field(default=False)),
         "dropout": (float, Field(default=0.0)),
         "zero_init_output": (bool, Field(default=False)),
-        "activation": (Union[Callable[..., Any], str], Field(default=nn.Identity))
+        "activation": (Callable[..., Any], Field(default=nn.Identity))
     }
 
     type_fields = FeedForwardConfigFactory.get_config_fields(ffn_type)
