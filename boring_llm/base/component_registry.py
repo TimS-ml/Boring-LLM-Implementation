@@ -7,6 +7,9 @@ from torch import Tensor
 from boring_llm.base.base_config import BaseConfig
 from boring_llm.utils.utils import PrintInitParamsMixin
 
+from boring_utils.helpers import VERBOSE
+from boring_llm.utils.utils import debug_init
+
 
 T = TypeVar('T', bound=nn.Module)
 
@@ -36,6 +39,7 @@ class ComponentRegistry(Generic[T]):
     def register(self, name: str, config_fields: Dict[str, Any] = None):
         """Register both strategy and its configuration in one step"""
         def decorator(strategy_class):
+            if VERBOSE: strategy_class = debug_init(strategy_class)
             self._strategies[name] = strategy_class
             if config_fields:
                 self._configs[name] = config_fields

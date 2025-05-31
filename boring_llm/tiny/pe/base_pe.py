@@ -271,7 +271,7 @@ if __name__ == "__main__":
         test_positional_embedding_transformer()
         
         # Test simplified version
-        tprint("\nTesting SimplifiedPETransformer...")
+        tprint("Testing SimplifiedPETransformer...")
         pe_config = PEConfig(type="fixed", dim_model=EMBEDDING_DIM, max_seq_len=BLOCK_SIZE)
         simple_model = SimplifiedPETransformer(
             num_tokens=NUM_TOKENS,

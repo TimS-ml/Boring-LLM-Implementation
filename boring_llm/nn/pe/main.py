@@ -10,16 +10,13 @@ import torch.nn.functional as F
 from torch import Tensor
 from einops import rearrange
 
-from boring_llm.base.component_registry import ComponentTransform, ComponentRegistry, ComponentConfig
-from boring_llm.nn.norm.norm import l2norm
+from boring_llm.base.component_registry import ComponentConfig
 from .registry import pe_registry
 
 
 # ============= Configuration =============
 class PEConfig(ComponentConfig):
-    """Positional Encoding Configuration - inherits dim_model from BaseConfig"""
-    # Remove dim_model since it's already in BaseConfig
-    
+    """Positional Encoding Configuration - inherits dim_model etc. from BaseConfig"""
     # Type-specific fields (will be validated based on type)
     l2norm_embed: bool = Field(default=False, description="Whether to L2 normalize embeddings")
     rotary_percentage: float = Field(default=1.0, description="Percentage of dimensions for rotary encoding")

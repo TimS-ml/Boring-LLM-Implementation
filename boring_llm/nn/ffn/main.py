@@ -8,15 +8,13 @@ import torch
 import torch.nn as nn
 from torch import Tensor
 
-from boring_llm.base.component_registry import ComponentTransform, ComponentRegistry, ComponentConfig, ComponentModule
-from boring_llm.base.base_config import BaseConfig
+from boring_llm.base.component_registry import ComponentConfig
 from .registry import ffn_registry
 
 
 # ============= Configuration =============
 class FFNConfig(ComponentConfig):
-    """FFN Configuration - inherits dim_model from BaseConfig"""
-    # Remove dim_model since it's already in BaseConfig
+    """FFN Configuration - inherits dim_model etc. from BaseConfig"""
     ffn_dim_out: Optional[int] = Field(default=None, description="Output dimension (if None, same as input)")
     mult_dim: float = Field(default=4, description="Multiplier for inner dimension")
     inner_dim: Optional[int] = Field(default=None, description="Inner dimension (if None, input * mult_dim)")
