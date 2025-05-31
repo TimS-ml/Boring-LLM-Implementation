@@ -88,35 +88,34 @@ VERBOSE=1 DEBUG=2 python boring_llm/tiny/pe/base_pe.py
 
 Will print out the more detailed and colorful information about the model like this:
 ```
-********** AbsolutePositionalEncoding.__print_init_args__ -> Args **********
-    dim: 96
+[2025-05-31 18:08:30] ===== test_positional_embedding_transformer -> Creating Absolute PE... =====
+[2025-05-31 18:08:30] ***** AbsolutePositionalEncoding.__print_init_args__ -> Kwargs *****
+    dim_model: 96
     max_seq_len: 128
-    l2norm_embed: False
-
-********** FixedPositionalEncoding.__print_init_args__ -> Args **********
-    dim: 96
-
-********** FixedPositionalEncoding.__print_init_args__ -> Kwargs **********
+    l2norm_embed: True
+[2025-05-31 18:08:30] ===== test_positional_embedding_transformer -> Creating Fixed PE... =====
+[2025-05-31 18:08:30] ***** FixedPositionalEncoding.__print_init_args__ -> Kwargs *****
+    dim_model: 96
     max_seq_len: 128
-    l2norm_embed: False
-
-========== test_positional_embedding_transformer -> All tests passed! ==========
-```
-
-
-## File Structure
-Take pe for example, it has the following structure:
-```
-boring_llm/nn/pe/
-├── __init__.py            # Export main classes and functions
-├── base.py                # Base interfaces and abstract classes
-├── config.py              # Configuration classes using Pydantic
-├── factory.py             # Factory for creating positional encoding instances
-├── main.py                # Main PE implementation that uses strategies
-└── strategies/            # Different PE implementations
-    ├── __init__.py        # Export strategy classes
-    ├── absolute.py        # Absolute positional encoding
-    ├── fixed.py           # Fixed/sinusoidal positional encoding
-    ├── rotary.py          # RoPE (Rotary Position Embedding)
-    └── alibi.py           # ALiBi (Attention with Linear Biases)
+[2025-05-31 18:08:30] ===== test_positional_embedding_transformer -> Creating No PE... =====
+[2025-05-31 18:08:30] ===== test_positional_embedding_transformer -> Creating Rotary PE... =====
+[2025-05-31 18:08:30] ***** RotaryPositionalEncoding.__print_init_args__ -> Kwargs *****
+    dim_model: 96
+    max_seq_len: 128
+    rotary_percentage: 0.5
+    rope_base: 10000
+[2025-05-31 18:08:30] ===== test_positional_embedding_transformer -> Testing Absolute PE... =====
+[2025-05-31 18:08:31] ===== test_positional_embedding_transformer -> Absolute PE output shape: torch.Size([8, 128, 128]) ✓ =====
+[2025-05-31 18:08:31] ===== test_positional_embedding_transformer -> Testing Fixed PE... =====
+[2025-05-31 18:08:31] ===== test_positional_embedding_transformer -> Fixed PE output shape: torch.Size([8, 128, 128]) ✓ =====
+[2025-05-31 18:08:31] ===== test_positional_embedding_transformer -> Testing No PE... =====
+[2025-05-31 18:08:31] ===== test_positional_embedding_transformer -> No PE output shape: torch.Size([8, 128, 128]) ✓ =====
+[2025-05-31 18:08:31] ===== test_positional_embedding_transformer -> Testing Rotary PE... =====
+[2025-05-31 18:08:31] ===== test_positional_embedding_transformer -> Rotary PE output shape: torch.Size([8, 128, 128]) ✓ =====
+[2025-05-31 18:08:31] ===== test_positional_embedding_transformer -> All tests passed! 🎉 =====
+[2025-05-31 18:08:31] ===== <module> -> Testing SimplifiedPETransformer... =====
+[2025-05-31 18:08:31] ***** FixedPositionalEncoding.__print_init_args__ -> Kwargs *****
+    dim_model: 96
+    max_seq_len: 128
+[2025-05-31 18:08:31] ===== <module> -> SimplifiedPETransformer output shape: torch.Size([8, 128, 128]) ✓ =====
 ```
