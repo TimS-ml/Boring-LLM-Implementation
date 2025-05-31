@@ -2,6 +2,7 @@ from typing import Dict, Type, Any, ClassVar
 from boring_llm.base.base_factory import BaseFactory, BaseConfigFactory
 from boring_llm.nn.pe.base import PositionalEncodingTransform
 
+
 class PositionalEncodingFactory(BaseFactory[PositionalEncodingTransform]):
     """Factory for creating positional encoding modules"""
     
