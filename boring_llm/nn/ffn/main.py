@@ -1,122 +1,156 @@
+"""
+Simplified FFN implementation
+Reduces 6 files (base.py, config.py, factory.py, main.py, strategies/) to 1 file
+"""
+from typing import Optional, Callable
+from pydantic import Field
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-# from einops import rearrange
-
 from torch import Tensor
-from typing import Optional, Tuple, Union, List, Literal, Any
 
-from boring_llm.nn.ffn.config import FeedForwardConfig, create_ffn_config
-from boring_llm.nn.ffn.base import FeedForwardTransform
-from boring_llm.nn.ffn.factory import FeedForwardFactory
-
-from boring_utils.utils import cprint, tprint
-from boring_utils.helpers import DEBUG
+from boring_llm.base.component_registry import ComponentTransform, ComponentRegistry, ComponentConfig, ComponentModule
+from boring_llm.base.base_config import BaseConfig
+from .registry import ffn_registry
 
 
+# ============= Configuration =============
+class FFNConfig(ComponentConfig):
+    """FFN Configuration - inherits dim_model from BaseConfig"""
+    # Remove dim_model since it's already in BaseConfig
+    ffn_dim_out: Optional[int] = Field(default=None, description="Output dimension (if None, same as input)")
+    mult_dim: float = Field(default=4, description="Multiplier for inner dimension")
+    inner_dim: Optional[int] = Field(default=None, description="Inner dimension (if None, input * mult_dim)")
+    post_act_ln: bool = Field(default=False, description="Whether to use LayerNorm after activation")
+    no_bias: bool = Field(default=False, description="Whether to remove bias")
+    dropout: float = Field(default=0.0, description="Dropout probability")
+    zero_init_output: bool = Field(default=False, description="Whether to initialize output to zero")
+    activation: Callable = Field(default=nn.GELU, description="Activation function")
+    
+    # FFN specific fields
+    post_type: str = Field(default="post_standard", description="Post-processor type")
+    mult_bias: bool = Field(default=True, description="GLU multiplicative bias")
+    
+    def model_post_init(self, __context):
+        """Post-init processing"""
+        # Calculate inner_dim if not provided
+        if self.inner_dim is None:
+            self.inner_dim = int(self.dim_model * self.mult_dim)
+        
+        # Set output dimension
+        if self.ffn_dim_out is None:
+            self.ffn_dim_out = self.dim_model
+
+
+# ============= Main FFN Module =============
 class BoringFeedForward(nn.Module):
-    """
-    Main feed-forward network module that uses strategy pattern
-    to support different types of feed-forward implementations
-    """
-    def __init__(self, config: FeedForwardConfig):
+    """Simplified FFN that reduces complexity while keeping flexibility"""
+    
+    def __init__(self, config: FFNConfig = None, **kwargs):
         super().__init__()
+        
+        # Handle both config object and direct kwargs
+        if config is None:
+            config = FFNConfig(**kwargs)
+        else:
+            # Override config with any provided kwargs
+            config_dict = config.model_dump()
+            config_dict.update(kwargs)
+            config = FFNConfig(**config_dict)
+        
         self.config = config
         
-        dim = config.dim_model
-        dim_out = config.ffn_dim_out or dim
-        mult = config.mult_dim
-        inner_dim = int(dim * mult) if config.inner_dim is None else config.inner_dim
-
-        ffn_type = config.type
-        ffn_post_type = config.post_type
+        # Create transform strategy
+        transform_kwargs = {
+            'dim_model': config.dim_model,
+            'inner_dim': config.inner_dim,
+            'activation': config.activation,
+            'no_bias': config.no_bias,
+        }
         
-        if DEBUG: cprint(config)
-        transform_args = create_ffn_config(ffn_type)(
-            dim_model=dim,
-            inner_dim=inner_dim,
-            activation=config.activation,
-            no_bias=config.no_bias
-        )
-        factory_args = transform_args.model_dump(exclude={"type", "post_type"})
-        # if ffn_type == "glu": factory_args["mult_bias"] = config.mult_bias 
-        if ffn_type == "glu" and hasattr(config, "mult_bias"):
-            factory_args["mult_bias"] = config.mult_bias
-        if DEBUG: cprint(factory_args)
-        self.ffn_transform = FeedForwardFactory.create(
-            ffn_type=ffn_type,
-            **factory_args
-        )
-        trans_dim_out = self.ffn_transform.output_dim
-        
-        post_args = create_ffn_config(ffn_post_type)(
-            dim_model=dim_out,
-            inner_dim=trans_dim_out,
-            dropout=config.dropout,
-            post_act_ln=config.post_act_ln,
-            no_bias=config.no_bias,
-            zero_init_output=config.zero_init_output
-        )
-        post_factory_args = post_args.model_dump(exclude={"type", "post_type"})
-        if DEBUG: cprint(post_factory_args)
-        self.post_processor = FeedForwardFactory.create(
-            ffn_type=ffn_post_type,
-            **post_factory_args
-        )
-
-    def forward(self, x: Tensor, **kwargs) -> Tensor:
-        """
-        Apply feed-forward transformation to input tensor
-        
-        Args:
-            x: Input tensor of shape [batch, seq_len, dim]
-            **kwargs: Additional arguments passed to the transformation
+        # Add type-specific kwargs
+        if config.type == "glu":
+            transform_kwargs['mult_bias'] = config.mult_bias
             
-        Returns:
-            Transformed tensor
-        """
-        transformed = self.ffn_transform.apply(x, **kwargs)
+        self.transform = ffn_registry.create_strategy(config.type, **transform_kwargs)
+        
+        # Create post-processor
+        post_kwargs = {
+            'dim_model': config.ffn_dim_out,
+            'inner_dim': self.transform.output_dim,
+            'dropout': config.dropout,
+            'post_act_ln': config.post_act_ln,
+            'no_bias': config.no_bias,
+            'zero_init_output': config.zero_init_output,
+        }
+        
+        self.post_processor = ffn_registry.create_strategy(config.post_type, **post_kwargs)
+    
+    def forward(self, x: Tensor, **kwargs) -> Tensor:
+        """Apply FFN transformation"""
+        transformed = self.transform.apply(x, **kwargs)
         return self.post_processor.apply(transformed)
 
 
-if __name__ == "__main__":
-    from boring_llm.base.tiny_config import *
-    from boring_llm.nn.activation.activation import ReluSquared
+# ============= Convenience Functions =============
+def create_ffn(ffn_type: str = "standard", **kwargs) -> BoringFeedForward:
+    """Convenience function to create FFN"""
+    # Extract type from kwargs if present to avoid duplicate parameter
+    if 'type' in kwargs:
+        ffn_type = kwargs.pop('type')
     
-    tprint("Standard FFN")
-    ffn_type = "standard"
-    ffn_args = create_ffn_config(ffn_type)(
-        dim_model=EMBEDDING_DIM,
-        mult_dim=4,
-        post_type="post_standard",
-        activation=nn.GELU()  # using callable instance
-    )
-    ffn = BoringFeedForward(ffn_args)
-    x = torch.randn(2, 3, EMBEDDING_DIM)
-    y = ffn(x)
-    print(f"Standard FFN output shape: {y.shape}")
+    # Handle string activation names
+    if 'activation' in kwargs and isinstance(kwargs['activation'], str):
+        activation_map = {
+            'gelu': nn.GELU,
+            'relu': nn.ReLU,
+            'silu': nn.SiLU,
+            'swish': nn.SiLU,
+            'tanh': nn.Tanh,
+            'sigmoid': nn.Sigmoid
+        }
+        activation_name = kwargs['activation'].lower()
+        if activation_name in activation_map:
+            kwargs['activation'] = activation_map[activation_name]
+        else:
+            raise ValueError(f"Unknown activation: {kwargs['activation']}")
+    
+    config = FFNConfig(type=ffn_type, **kwargs)
+    return BoringFeedForward(config)
 
-    tprint("GLU FFN")
-    ffn_type = "glu"
-    ffn_args = create_ffn_config(ffn_type)(
-        dim_model=EMBEDDING_DIM,
-        mult_dim=2,
-        post_type="post_standard",
-        mult_bias=False,
-        activation=nn.SiLU()  # using callable instance
-    )
-    ffn = BoringFeedForward(ffn_args)
-    y = ffn(x)
-    print(f"GLU FFN output shape: {y.shape}")
-    
-    tprint("ReluSquared FFN")
-    ffn_type = "standard"
-    ffn_args = create_ffn_config(ffn_type)(
-        dim_model=EMBEDDING_DIM,
+
+# ============= Usage Examples =============
+if __name__ == "__main__":
+    # Example 1: Using config object
+    config = FFNConfig(
+        type="standard",
+        dim_model=512,
         mult_dim=4,
-        post_type="post_standard",
-        activation=ReluSquared()  # using custom activation
+        activation=nn.GELU
     )
-    ffn = BoringFeedForward(ffn_args)
-    y = ffn(x)
-    print(f"ReluSquared FFN output shape: {y.shape}") 
+    ffn1 = BoringFeedForward(config)
+    
+    # Example 2: Using convenience function
+    ffn2 = create_ffn(
+        ffn_type="glu",
+        dim_model=512,
+        mult_dim=2,
+        activation=nn.SiLU,
+        mult_bias=True
+    )
+    
+    # Example 3: Direct kwargs
+    ffn3 = BoringFeedForward(
+        type="standard",
+        dim_model=512,
+        mult_dim=4
+    )
+    
+    # Test
+    x = torch.randn(2, 10, 512)
+    y1 = ffn1(x)
+    y2 = ffn2(x)
+    y3 = ffn3(x)
+    
+    print(f"Standard FFN output: {y1.shape}")
+    print(f"GLU FFN output: {y2.shape}")
+    print(f"Direct kwargs FFN output: {y3.shape}") 

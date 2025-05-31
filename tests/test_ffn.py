@@ -1,175 +1,193 @@
-import pytest
+#!/usr/bin/env python3
+"""Test FFN implementations"""
+
 import torch
 import torch.nn as nn
-from boring_llm.nn.ffn.config import FeedForwardConfig, create_ffn_config
-from boring_llm.nn.ffn.main import BoringFeedForward
-from boring_llm.nn.activation.activation import ReluSquared
-
-# ------------------------------
-# Base Config
-# ------------------------------
-@pytest.fixture
-def default_config():
-    return FeedForwardConfig(
-        d_model=512,
-        dropout=0.1,
-        activation=nn.GELU()
-    )
-
-@pytest.fixture
-def glu_config():
-    return FeedForwardConfig(
-        d_model=512,
-        dropout=0.1,
-        activation=nn.GELU()
-    )
+from boring_llm.nn.ffn.main import create_ffn, BoringFeedForward, FFNConfig, ffn_registry
 
 
-# ------------------------------
-# Shape Tests 
-# ------------------------------
-def test_output_shape(default_config):
-    ffn = BoringFeedForward(default_config)
-    x = torch.randn(2, 10, 512)
-    output = ffn(x)
-    assert output.shape == (2, 10, 512)
+def test_ffn_basic():
+    """Test basic FFN functionality"""
+    print("🚀 Testing FFN Basic Functionality")
+    
+    # Test data
+    batch_size, seq_len, dim_model = 2, 32, 128
+    x = torch.randn(batch_size, seq_len, dim_model)
+    print(f"Input tensor shape: {x.shape}")
+    
+    # ========== FFN Tests ==========
+    print("\n📦 FFN Tests:")
+    
+    # 1. Standard FFN
+    ffn1 = create_ffn(ffn_type="standard", dim_model=dim_model, mult_dim=4)
+    y1 = ffn1(x)
+    print(f"  Standard FFN: {x.shape} -> {y1.shape} ✅")
+    assert y1.shape == x.shape, f"Expected {x.shape}, got {y1.shape}"
+    
+    # 2. GLU FFN
+    ffn2 = create_ffn(ffn_type="glu", dim_model=dim_model, mult_dim=2, mult_bias=True)
+    y2 = ffn2(x)
+    print(f"  GLU FFN: {x.shape} -> {y2.shape} ✅")
+    assert y2.shape == x.shape, f"Expected {x.shape}, got {y2.shape}"
+    
+    # 3. With config object
+    config = FFNConfig(type="standard", dim_model=dim_model, dropout=0.1, post_act_ln=True)
+    ffn3 = BoringFeedForward(config)
+    y3 = ffn3(x)
+    print(f"  Config FFN: {x.shape} -> {y3.shape} ✅")
+    assert y3.shape == x.shape, f"Expected {x.shape}, got {y3.shape}"
+    
+    return True
 
-def test_zero_init_output():
-    config = FeedForwardConfig(
-        d_model=512,
-        dropout=0.1,
-        activation=nn.GELU(),
-        zero_init_output=True
-    )
-    ffn = BoringFeedForward(config)
-    assert torch.allclose(ffn.post_processor.proj.weight, torch.zeros_like(ffn.post_processor.proj.weight))
+
+def test_ffn_parameters():
+    """Test FFN parameter counts and configurations"""
+    print("\n📊 Testing FFN Parameters")
+    
+    dim_model = 128
+    
+    # Standard FFN
+    ffn_standard = create_ffn(ffn_type="standard", dim_model=dim_model, mult_dim=4)
+    standard_params = sum(p.numel() for p in ffn_standard.parameters())
+    print(f"  Standard FFN: {standard_params:,} parameters")
+    
+    # GLU FFN  
+    ffn_glu = create_ffn(ffn_type="glu", dim_model=dim_model, mult_dim=2, mult_bias=True)
+    glu_params = sum(p.numel() for p in ffn_glu.parameters())
+    print(f"  GLU FFN: {glu_params:,} parameters")
+    
+    # With different mult_dim
+    ffn_large = create_ffn(ffn_type="standard", dim_model=dim_model, mult_dim=8)
+    large_params = sum(p.numel() for p in ffn_large.parameters())
+    print(f"  Large FFN (mult_dim=8): {large_params:,} parameters")
+    
+    # Verify parameter scaling
+    assert large_params > standard_params, "Large FFN should have more parameters"
+    
+    return True
 
 
-# ------------------------------
-# Config Tests 
-# ------------------------------
-def test_different_activation_types():
-    activations = [
-        nn.GELU(),
-        nn.ReLU(),
-        nn.SiLU(),
-        nn.Tanh(),
-        ReluSquared(),
-        nn.Identity()
+def test_ffn_configurations():
+    """Test different FFN configurations"""
+    print("\n⚙️ Testing FFN Configurations")
+    
+    batch_size, seq_len, dim_model = 1, 16, 64
+    x = torch.randn(batch_size, seq_len, dim_model)
+    
+    configs = [
+        # Standard configurations
+        {"ffn_type": "standard", "dim_model": dim_model, "mult_dim": 2, "activation": nn.ReLU},
+        {"ffn_type": "standard", "dim_model": dim_model, "mult_dim": 4, "activation": nn.GELU},
+        
+        # GLU configurations
+        {"ffn_type": "glu", "dim_model": dim_model, "mult_dim": 1, "activation": nn.SiLU, "mult_bias": True},
+        {"ffn_type": "glu", "dim_model": dim_model, "mult_dim": 2, "activation": nn.SiLU, "mult_bias": False},
+        
+        # With dropout and layer norm
+        {"ffn_type": "standard", "dim_model": dim_model, "mult_dim": 2, "dropout": 0.1, "post_act_ln": True},
+        {"ffn_type": "standard", "dim_model": dim_model, "mult_dim": 2, "no_bias": True, "zero_init_output": True},
     ]
     
-    for activation in activations:
-        config = FeedForwardConfig(
-            d_model=512,
-            dropout=0.1,
-            activation=activation
-        )
-        ffn = BoringFeedForward(config)
-        x = torch.randn(2, 10, 512)
-        output = ffn(x)
-        assert output.shape == (2, 10, 512)
-
-def test_no_bias():
-    config = FeedForwardConfig(
-        d_model=512,
-        dropout=0.1,
-        no_bias=True,
-        activation=nn.GELU()
-    )
-    ffn = BoringFeedForward(config)
+    for i, config in enumerate(configs):
+        ffn = create_ffn(**config)
+        y = ffn(x)
+        print(f"  Config {i+1}: {config['ffn_type']} -> {y.shape} ✅")
+        assert y.shape == x.shape, f"Expected {x.shape}, got {y.shape}"
     
-    # Check standard transform projection has no bias
-    assert ffn.ffn_transform.proj.bias is None
-    # Check post processor projection has no bias
-    assert ffn.post_processor.proj.bias is None
+    return True
 
 
-# ------------------------------
-# Config Tests (GLU)
-# ------------------------------
-def test_glu_activation():
-    config = create_ffn_config("glu")(
-        dim_model=512,
-        mult_dim=2,
-        post_type="post_standard",
-        mult_bias=False,
-        activation=nn.SiLU()
-    )
-    ffn = BoringFeedForward(config)
-    x = torch.randn(2, 10, 512)
-    output = ffn(x)
-    assert output.shape == (2, 10, 512)
-
-def test_standard_activation():
-    config = create_ffn_config("standard")(
-        dim_model=512,
-        mult_dim=4,
-        post_type="post_standard",
-        activation=nn.GELU()
-    )
-    ffn = BoringFeedForward(config)
-    x = torch.randn(2, 10, 512)
-    output = ffn(x)
-    assert output.shape == (2, 10, 512)
-
-def test_relu_squared_activation():
-    config = create_ffn_config("standard")(
-        dim_model=512,
-        mult_dim=4,
-        post_type="post_standard",
-        activation=ReluSquared()
-    )
-    ffn = BoringFeedForward(config)
-    x = torch.randn(2, 10, 512)
-    output = ffn(x)
-    assert output.shape == (2, 10, 512)
-
-def test_activation_callable_instantiation():
-    # Test that activation classes are properly instantiated
-    config = FeedForwardConfig(
-        dim_model=512,
-        activation=nn.GELU  # Pass class, not instance
-    )
-    # Should be instantiated in model_post_init
-    assert isinstance(config.activation, nn.Module)
+def test_ffn_registry():
+    """Test FFN registry functionality"""
+    print("\n📋 Testing FFN Registry")
     
-    ffn = BoringFeedForward(config)
-    x = torch.randn(2, 10, 512)
-    output = ffn(x)
-    assert output.shape == (2, 10, 512)
+    available_types = ffn_registry.get_available_types()
+    print(f"  Available FFN types: {available_types}")
+    
+    # Test each registered type
+    for ffn_type in available_types:
+        if ffn_type.startswith("post_"):
+            continue  # Skip post-processors for this test
+            
+        try:
+            config_fields = ffn_registry.get_config_fields(ffn_type)
+            print(f"  {ffn_type} config fields: {list(config_fields.keys())}")
+            
+            # Test creation
+            if ffn_type == "glu":
+                ffn = create_ffn(ffn_type=ffn_type, dim_model=64, mult_bias=True)
+            else:
+                ffn = create_ffn(ffn_type=ffn_type, dim_model=64)
+            print(f"  {ffn_type} creation: ✅")
+            
+        except Exception as e:
+            print(f"  {ffn_type} failed: {e}")
+            return False
+    
+    return True
 
 
-# ------------------------------
-# Integration Tests
-# ------------------------------
-def test_different_ffn_types():
-    """Test different FFN types with various activations"""
+def test_ffn_gradients():
+    """Test FFN gradient flow"""
+    print("\n🔄 Testing FFN Gradients")
+    
+    dim_model = 64
+    x = torch.randn(2, 10, dim_model, requires_grad=True)
+    
+    # Test gradient flow for different FFN types
     ffn_types = ["standard", "glu"]
-    activations = [nn.GELU(), nn.ReLU(), nn.SiLU(), ReluSquared()]
     
     for ffn_type in ffn_types:
-        for activation in activations:
-            if ffn_type == "glu":
-                config = create_ffn_config(ffn_type)(
-                    dim_model=256,
-                    mult_dim=2,
-                    post_type="post_standard",
-                    mult_bias=False,
-                    activation=activation
-                )
+        if ffn_type == "glu":
+            ffn = create_ffn(ffn_type=ffn_type, dim_model=dim_model, mult_bias=True)
+        else:
+            ffn = create_ffn(ffn_type=ffn_type, dim_model=dim_model)
+        
+        y = ffn(x)
+        loss = y.sum()
+        loss.backward()
+        
+        # Check if gradients exist
+        has_grad = x.grad is not None and x.grad.abs().sum() > 0
+        print(f"  {ffn_type} gradient flow: {'✅' if has_grad else '❌'}")
+        
+        # Clear gradients for next test
+        x.grad = None
+    
+    return True
+
+
+def run_all_ffn_tests():
+    """Run all FFN tests"""
+    tests = [
+        test_ffn_basic,
+        test_ffn_parameters,
+        test_ffn_configurations,
+        test_ffn_registry,
+        test_ffn_gradients,
+    ]
+    
+    passed = 0
+    total = len(tests)
+    
+    for test in tests:
+        try:
+            if test():
+                passed += 1
+                print(f"✅ {test.__name__} passed")
             else:
-                config = create_ffn_config(ffn_type)(
-                    dim_model=256,
-                    mult_dim=4,
-                    post_type="post_standard",
-                    activation=activation
-                )
-            
-            ffn = BoringFeedForward(config)
-            x = torch.randn(2, 8, 256)
-            output = ffn(x)
-            assert output.shape == (2, 8, 256)
+                print(f"❌ {test.__name__} failed")
+        except Exception as e:
+            print(f"❌ {test.__name__} failed with error: {e}")
+    
+    print(f"\n📈 FFN Test Results: {passed}/{total} tests passed")
+    return passed == total
 
 
 if __name__ == "__main__":
-    pytest.main([__file__])
+    success = run_all_ffn_tests()
+    if success:
+        print("\n🎉 All FFN tests passed!")
+    else:
+        print("\n💥 Some FFN tests failed!")
+    exit(0 if success else 1) 

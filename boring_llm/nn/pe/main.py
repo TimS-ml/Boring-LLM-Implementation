@@ -1,30 +1,69 @@
+"""
+Simplified Positional Encoding implementation
+Reduces 6 files (base.py, config.py, factory.py, main.py, strategies/) to 1 file
+"""
+from typing import Optional
+from pydantic import Field
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch import Tensor
-from typing import Optional
+from einops import rearrange
 
-from boring_llm.nn.pe.base import PositionalEncodingTransform
-from boring_llm.nn.pe.config import PositionalEncodingConfig
-from boring_llm.nn.pe.factory import PositionalEncodingFactory
-from boring_llm.nn.pe.config import create_pe_config
+from boring_llm.base.component_registry import ComponentTransform, ComponentRegistry, ComponentConfig
+from boring_llm.nn.norm.norm import l2norm
+from .registry import pe_registry
 
 
+# ============= Configuration =============
+class PEConfig(ComponentConfig):
+    """Positional Encoding Configuration - inherits dim_model from BaseConfig"""
+    # Remove dim_model since it's already in BaseConfig
+    
+    # Type-specific fields (will be validated based on type)
+    l2norm_embed: bool = Field(default=False, description="Whether to L2 normalize embeddings")
+    rotary_percentage: float = Field(default=1.0, description="Percentage of dimensions for rotary encoding")
+    rope_base: int = Field(default=10000, description="Base for rotary encoding")
+    alibi_num_heads: Optional[int] = Field(default=None, description="Number of heads for ALiBi")
+
+
+# ============= Main PE Module =============
 class BoringPositionalEncoding(nn.Module):
-    """
-    Main positional encoding module that uses strategy pattern
-    to support different types of positional encodings
-    """
-    def __init__(self, config: PositionalEncodingConfig):
+    """Simplified Positional Encoding that reduces complexity while keeping flexibility"""
+    
+    def __init__(self, config: PEConfig = None, **kwargs):
         super().__init__()
+        
+        # Handle both config object and direct kwargs
+        if config is None:
+            config = PEConfig(**kwargs)
+        else:
+            # Override config with any provided kwargs
+            config_dict = config.model_dump()
+            config_dict.update(kwargs)
+            config = PEConfig(**config_dict)
+        
         self.config = config
         self.max_seq_len = config.max_seq_len
         
-        pe_type = config.type
-        factory_args = config.model_dump(exclude={"type", "max_seq_len"})
-        self.pe_strategy = PositionalEncodingFactory.create(
-            encoding_type=pe_type,
-            **factory_args
-        )
+        # Create strategy
+        strategy_kwargs = {
+            'dim_model': config.dim_model,
+            'max_seq_len': config.max_seq_len,
+        }
+        
+        # Add type-specific kwargs
+        if config.type == "absolute":
+            strategy_kwargs['l2norm_embed'] = config.l2norm_embed
+        elif config.type == "rotary":
+            strategy_kwargs['rotary_percentage'] = config.rotary_percentage
+            strategy_kwargs['rope_base'] = config.rope_base
+        elif config.type == "alibi":
+            if config.alibi_num_heads is None:
+                raise ValueError("alibi_num_heads must be specified for ALiBi encoding")
+            strategy_kwargs['alibi_num_heads'] = config.alibi_num_heads
+        
+        self.pe_strategy = pe_registry.create_strategy(config.type, **strategy_kwargs)
     
     def forward(self, x: Tensor, pos: Optional[Tensor] = None, **kwargs) -> Tensor:
         """
@@ -40,24 +79,67 @@ class BoringPositionalEncoding(nn.Module):
         """
         seq_len, device = x.shape[1], x.device
         
-        # Common validation and default generation
-        assert seq_len <= self.max_seq_len, f'Sequence length {seq_len} exceeds maximum sequence length {self.max_seq_len}'
+        # Validation
+        assert seq_len <= self.max_seq_len, f'Sequence length {seq_len} exceeds maximum {self.max_seq_len}'
         
         if pos is None:
             pos = torch.arange(seq_len, device=device)
             
-        # Delegate to the strategy implementation
+        # Delegate to strategy implementation
         return self.pe_strategy.apply(pos=pos, **kwargs)
 
 
+# ============= Convenience Functions =============
+def create_pe(pe_type: str = "fixed", **kwargs) -> BoringPositionalEncoding:
+    """Convenience function to create Positional Encoding"""
+    # Extract type from kwargs if present to avoid duplicate parameter
+    if 'type' in kwargs:
+        pe_type = kwargs.pop('type')
+    config = PEConfig(type=pe_type, **kwargs)
+    return BoringPositionalEncoding(config)
+
+
+# ============= Usage Examples =============
 if __name__ == "__main__":
-    from boring_llm.base.tiny_config import *
-    pe_type="absolute"
-    pe_args = create_pe_config(pe_type)(
-                    dim_model=EMBEDDING_DIM,
-                    max_seq_len=BLOCK_SIZE,
-                    l2norm_embed=True
-                )
-    pe = BoringPositionalEncoding(pe_args)
-    x = torch.randn(1, BLOCK_SIZE, EMBEDDING_DIM)
-    print(pe(x).shape)
+    # Example 1: Fixed sinusoidal encoding
+    pe1 = create_pe(
+        pe_type="fixed",
+        dim_model=512,
+        max_seq_len=1024
+    )
+    
+    # Example 2: Learnable absolute encoding
+    pe2 = create_pe(
+        pe_type="absolute",
+        dim_model=512,
+        max_seq_len=1024,
+        l2norm_embed=True
+    )
+    
+    # Example 3: Rotary encoding
+    pe3 = create_pe(
+        pe_type="rotary",
+        dim_model=512,
+        rotary_percentage=0.5,
+        rope_base=10000
+    )
+    
+    # Example 4: ALiBi encoding
+    pe4 = create_pe(
+        pe_type="alibi",
+        dim_model=512,
+        alibi_num_heads=8
+    )
+    
+    # Test
+    x = torch.randn(2, 128, 512)
+    
+    pos_emb1 = pe1(x)
+    pos_emb2 = pe2(x)
+    pos_emb3 = pe3(x)
+    pos_emb4 = pe4(x)
+    
+    print(f"Fixed PE output: {pos_emb1.shape if pos_emb1 is not None else None}")
+    print(f"Absolute PE output: {pos_emb2.shape if pos_emb2 is not None else None}")
+    print(f"Rotary PE output: {pos_emb3.shape if pos_emb3 is not None else None}")
+    print(f"ALiBi PE output: {pos_emb4.shape if pos_emb4 is not None else None}") 
