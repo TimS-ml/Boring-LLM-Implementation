@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Test Positional Encoding implementations"""
 
 import torch

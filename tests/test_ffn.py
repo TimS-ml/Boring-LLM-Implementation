@@ -80,8 +80,8 @@ def test_ffn_configurations():
         {"ffn_type": "standard", "dim_model": dim_model, "mult_dim": 4, "activation": nn.GELU},
         
         # GLU configurations
-        {"ffn_type": "glu", "dim_model": dim_model, "mult_dim": 1, "activation": nn.SiLU, "mult_bias": True},
-        {"ffn_type": "glu", "dim_model": dim_model, "mult_dim": 2, "activation": nn.SiLU, "mult_bias": False},
+        {"ffn_type": "glu", "dim_model": dim_model, "mult_dim": 1, "activation": "SiLU", "mult_bias": True},
+        {"ffn_type": "glu", "dim_model": dim_model, "mult_dim": 2, "activation": "SiLU", "mult_bias": False},
         
         # With dropout and layer norm
         {"ffn_type": "standard", "dim_model": dim_model, "mult_dim": 2, "dropout": 0.1, "post_act_ln": True},
