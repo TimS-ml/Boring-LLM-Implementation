@@ -1,7 +1,3 @@
-"""
-FFN Transform Registry
-Contains all FFN transformation strategies and their registry
-"""
 from typing import Callable
 from pydantic import Field
 import torch
@@ -11,7 +7,6 @@ from torch import Tensor
 from boring_llm.base.component_registry import ComponentTransform, ComponentRegistry
 
 
-# ============= FFN Transform Base =============
 class FFNTransform(ComponentTransform):
     """Base class for FFN transformations"""
     
@@ -21,11 +16,9 @@ class FFNTransform(ComponentTransform):
         raise NotImplementedError
 
 
-# ============= Registry Setup =============
 ffn_registry = ComponentRegistry[FFNTransform]("FFN")
 
 
-# ============= FFN Strategies =============
 @ffn_registry.register("standard")
 class StandardFFN(FFNTransform):
     """Standard feed-forward transformation"""

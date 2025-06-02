@@ -137,7 +137,6 @@ class PositionalEmbeddingTransformerWrapper(nn.Module):
         return self.to_logits(x)
 
 
-# ============= Convenience Functions =============
 def create_pe_transformer(
     num_tokens: int,
     max_seq_len: int, 
@@ -227,7 +226,7 @@ def test_positional_embedding_transformer():
     tprint("All tests passed! 🎉")
 
 
-# ============= Alternative Implementation with Direct PE Usage =============
+# Alternative Implementation with Direct PE Usage
 class SimplifiedPETransformer(nn.Module):
     """Even more simplified transformer using PE directly"""
     

@@ -1,7 +1,3 @@
-"""
-Positional Encoding Transform Registry
-Contains all PE transformation strategies and their registry
-"""
 from typing import Optional
 from pydantic import Field
 import torch
@@ -12,7 +8,6 @@ from boring_llm.base.component_registry import ComponentTransform, ComponentRegi
 from boring_llm.nn.norm.norm import l2norm
 
 
-# ============= PE Transform Base =============
 class PETransform(ComponentTransform):
     """Base class for positional encoding transformations"""
     
@@ -21,11 +16,9 @@ class PETransform(ComponentTransform):
         raise NotImplementedError
 
 
-# ============= Registry Setup =============
 pe_registry = ComponentRegistry[PETransform]("PositionalEncoding")
 
 
-# ============= PE Strategies =============
 @pe_registry.register("fixed")
 class FixedPositionalEncoding(PETransform):
     """
@@ -79,6 +72,7 @@ class NonePositionalEncoding(PETransform):
         return None
 
 
+# TODO: apply RoPE to attention
 @pe_registry.register("rotary", {
     "rotary_percentage": (float, Field(default=1.0, description="Percentage of dimensions to apply rotary encoding to")),
     "rope_base": (int, Field(default=10000, description="Base for rotary encoding"))

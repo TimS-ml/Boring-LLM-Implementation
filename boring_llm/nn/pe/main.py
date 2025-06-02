@@ -1,7 +1,3 @@
-"""
-Simplified Positional Encoding implementation
-Reduces 6 files (base.py, config.py, factory.py, main.py, strategies/) to 1 file
-"""
 from typing import Optional
 from pydantic import Field
 import torch
@@ -11,10 +7,9 @@ from torch import Tensor
 from einops import rearrange
 
 from boring_llm.base.component_registry import ComponentConfig
-from .registry import pe_registry
+from boring_llm.nn.pe.registry import pe_registry
 
 
-# ============= Configuration =============
 class PEConfig(ComponentConfig):
     """Positional Encoding Configuration - inherits dim_model etc. from BaseConfig"""
     # Type-specific fields (will be validated based on type)
@@ -24,7 +19,6 @@ class PEConfig(ComponentConfig):
     alibi_num_heads: Optional[int] = Field(default=None, description="Number of heads for ALiBi")
 
 
-# ============= Main PE Module =============
 class BoringPositionalEncoding(nn.Module):
     """Simplified Positional Encoding that reduces complexity while keeping flexibility"""
     
@@ -32,15 +26,10 @@ class BoringPositionalEncoding(nn.Module):
         super().__init__()
         
         # Handle both config object and direct kwargs
-        if config is None:
-            config = PEConfig(**kwargs)
-        else:
-            # Override config with any provided kwargs
-            config_dict = config.model_dump()
-            config_dict.update(kwargs)
-            config = PEConfig(**config_dict)
+        config_dict = config.model_dump() if config else {}
+        config_dict.update(kwargs)
+        config = PEConfig(**config_dict)
         
-        self.config = config
         self.max_seq_len = config.max_seq_len
         
         # Create strategy
@@ -86,7 +75,6 @@ class BoringPositionalEncoding(nn.Module):
         return self.pe_strategy.apply(pos=pos, **kwargs)
 
 
-# ============= Convenience Functions =============
 def create_pe(pe_type: str = "fixed", **kwargs) -> BoringPositionalEncoding:
     """Convenience function to create Positional Encoding"""
     # Extract type from kwargs if present to avoid duplicate parameter
@@ -96,7 +84,6 @@ def create_pe(pe_type: str = "fixed", **kwargs) -> BoringPositionalEncoding:
     return BoringPositionalEncoding(config)
 
 
-# ============= Usage Examples =============
 if __name__ == "__main__":
     # Example 1: Fixed sinusoidal encoding
     pe1 = create_pe(
