@@ -1,5 +1,6 @@
 from typing import Type
 import torch.nn as nn
+import torch.nn.functional as F
 
 
 def get_activation_by_name(name: str) -> Type[nn.Module]:
@@ -19,9 +20,9 @@ def get_activation_by_name(name: str) -> Type[nn.Module]:
     name = name.strip()
     
     # Try to get from torch.nn first
-    if hasattr(nn, name):
-        return getattr(nn, name)
-    
+    if hasattr(nn, name): return getattr(nn, name)
+    elif hasattr(F, name): return getattr(F, name) 
+
     # Try custom activation functions
     try:
         from boring_llm.nn.activation import ReluSquared
@@ -33,4 +34,4 @@ def get_activation_by_name(name: str) -> Type[nn.Module]:
     except ImportError:
         pass
     
-    raise ValueError(f"Unknown activation: {name}, please using PyTorch's standard naming convention (e.g. ReLU) instead of relu")
+    raise ValueError(f"Unknown activation: {name}, please using PyTorch's standard naming convention")
