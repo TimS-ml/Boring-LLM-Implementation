@@ -86,6 +86,10 @@ def test_ffn_configurations():
         # With dropout and layer norm
         {"ffn_type": "standard", "dim_model": dim_model, "mult_dim": 2, "dropout": 0.1, "post_act_ln": True},
         {"ffn_type": "standard", "dim_model": dim_model, "mult_dim": 2, "no_bias": True, "zero_init_output": True},
+        
+        # With new PostProcessors
+        {"ffn_type": "standard", "dim_model": dim_model, "post_type": "post_regularized", "spectral_norm": True},
+        {"ffn_type": "glu", "dim_model": dim_model, "post_type": "post_scaled", "learnable_scale": True},
     ]
     
     for i, config in enumerate(configs):
@@ -104,25 +108,60 @@ def test_ffn_registry():
     available_types = ffn_registry.get_available_types()
     print(f"  Available FFN types: {available_types}")
     
-    # Test each registered type
-    for ffn_type in available_types:
-        if ffn_type.startswith("post_"):
-            continue  # Skip post-processors for this test
-            
-        try:
-            config_fields = ffn_registry.get_config_fields(ffn_type)
-            print(f"  {ffn_type} config fields: {list(config_fields.keys())}")
-            
-            # Test creation
-            if ffn_type == "glu":
-                ffn = create_ffn(ffn_type=ffn_type, dim_model=64, mult_bias=True)
-            else:
-                ffn = create_ffn(ffn_type=ffn_type, dim_model=64)
-            print(f"  {ffn_type} creation: ✅")
-            
-        except Exception as e:
-            print(f"  {ffn_type} failed: {e}")
-            return False
+    # Define which types are actual FFN transforms (not routers or post-processors)
+    ffn_transform_types = ["standard", "glu"]
+    post_processor_types = ["post_standard", "post_regularized", "post_scaled"]
+    router_types = ["soft_router", "hard_router"]
+    
+    # Test FFN transform types
+    for ffn_type in ffn_transform_types:
+        if ffn_type in available_types:
+            try:
+                config_fields = ffn_registry.get_config_fields(ffn_type)
+                print(f"  {ffn_type} config fields: {list(config_fields.keys())}")
+                
+                # Test creation
+                if ffn_type == "glu":
+                    ffn = create_ffn(ffn_type=ffn_type, dim_model=64, mult_bias=True)
+                else:
+                    ffn = create_ffn(ffn_type=ffn_type, dim_model=64)
+                print(f"  {ffn_type} creation: ✅")
+                
+            except Exception as e:
+                print(f"  {ffn_type} failed: {e}")
+                return False
+    
+    # Test post-processor types
+    for post_type in post_processor_types:
+        if post_type in available_types:
+            try:
+                config_fields = ffn_registry.get_config_fields(post_type)
+                print(f"  {post_type} config fields: {list(config_fields.keys())}")
+                
+                # Test creation through create_ffn with post_type parameter
+                if post_type == "post_regularized":
+                    ffn = create_ffn(ffn_type="standard", dim_model=64, post_type=post_type, spectral_norm=True)
+                elif post_type == "post_scaled":
+                    ffn = create_ffn(ffn_type="standard", dim_model=64, post_type=post_type, learnable_scale=True)
+                else:
+                    ffn = create_ffn(ffn_type="standard", dim_model=64, post_type=post_type)
+                print(f"  {post_type} creation: ✅")
+                
+            except Exception as e:
+                print(f"  {post_type} failed: {e}")
+                return False
+    
+    # Test router types (just verify they exist and have config fields)
+    for router_type in router_types:
+        if router_type in available_types:
+            try:
+                config_fields = ffn_registry.get_config_fields(router_type)
+                print(f"  {router_type} config fields: {list(config_fields.keys())}")
+                print(f"  {router_type} registry check: ✅")
+                
+            except Exception as e:
+                print(f"  {router_type} failed: {e}")
+                return False
     
     return True
 
@@ -157,6 +196,68 @@ def test_ffn_gradients():
     return True
 
 
+def test_ffn_moe():
+    """Test MOE FFN functionality"""
+    print("\n🎯 Testing MOE FFN")
+    
+    batch_size, seq_len, dim_model = 2, 16, 128
+    x = torch.randn(batch_size, seq_len, dim_model)
+    
+    try:
+        # Test soft router MOE
+        from boring_llm.nn.ffn.main import create_moe_ffn
+        
+        moe_soft = create_moe_ffn(
+            num_experts=4,
+            top_k=2,
+            router_type="soft_router",
+            type="standard",
+            dim_model=dim_model,
+            mult_dim=2,
+            activation="SiLU"
+        )
+        
+        y_soft = moe_soft(x)
+        print(f"  Soft Router MOE: {x.shape} -> {y_soft.shape} ✅")
+        assert y_soft.shape == x.shape
+        
+        # Test hard router MOE
+        moe_hard = create_moe_ffn(
+            num_experts=4,
+            top_k=1,
+            router_type="hard_router",
+            type="standard",
+            dim_model=dim_model,
+            mult_dim=2,
+            temperature=1.0
+        )
+        
+        y_hard = moe_hard(x)
+        print(f"  Hard Router MOE: {x.shape} -> {y_hard.shape} ✅")
+        assert y_hard.shape == x.shape
+        
+        # Test MOE with GLU experts
+        moe_glu = create_moe_ffn(
+            num_experts=4,
+            top_k=2,
+            router_type="soft_router",
+            type="glu",
+            dim_model=dim_model,
+            mult_dim=1,
+            mult_bias=True
+        )
+        
+        y_glu = moe_glu(x)
+        print(f"  GLU Expert MOE: {x.shape} -> {y_glu.shape} ✅")
+        assert y_glu.shape == x.shape
+        
+        return True
+        
+    except Exception as e:
+        print(f"  MOE test failed: {e}")
+        return False
+
+
 def run_all_ffn_tests():
     """Run all FFN tests"""
     tests = [
@@ -165,6 +266,7 @@ def run_all_ffn_tests():
         test_ffn_configurations,
         test_ffn_registry,
         test_ffn_gradients,
+        test_ffn_moe,
     ]
     
     passed = 0

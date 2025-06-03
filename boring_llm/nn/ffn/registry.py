@@ -171,33 +171,161 @@ class HardRouterTransform(FFNTransform):
 # Post-processor
 ##############################
 
-@ffn_registry.register("post_standard")
-class PostProcessor(FFNTransform):
-    """Standard post-processor for feed-forward networks"""
+class BasePostProcessor(FFNTransform):
+    """Base class for post-processors with common functionality"""
     
     def __init__(self, dim_model: int, inner_dim: int, dropout: float = 0.0, 
                  post_act_ln: bool = False, no_bias: bool = False, 
                  zero_init_output: bool = False, **kwargs):
         super().__init__()
-        layers = []
+        self.dim_model = dim_model
+        self.inner_dim = inner_dim
         
+        # Pre-projection layers
+        self.pre_layers = nn.ModuleList()
         if post_act_ln: 
-            layers.append(nn.LayerNorm(inner_dim))
+            self.pre_layers.append(nn.LayerNorm(inner_dim))
         if dropout > 0: 
-            layers.append(nn.Dropout(dropout))
+            self.pre_layers.append(nn.Dropout(dropout))
         
-        self.proj = nn.Linear(inner_dim, dim_model, bias=not no_bias)
+        # Main projection layer
+        self.proj = self._create_projection_layer(inner_dim, dim_model, no_bias)
+        
+        # Initialize projection
         if zero_init_output:
-            nn.init.zeros_(self.proj.weight)
-            if not no_bias:
-                nn.init.zeros_(self.proj.bias)
-                
-        layers.append(self.proj)
-        self.sequence = nn.Sequential(*layers)
+            self._zero_init_projection()
+    
+    def _create_projection_layer(self, input_dim: int, output_dim: int, no_bias: bool) -> nn.Module:
+        """Create the main projection layer - can be overridden by subclasses"""
+        return nn.Linear(input_dim, output_dim, bias=not no_bias)
+    
+    def _zero_init_projection(self):
+        """Zero initialize the projection layer"""
+        nn.init.zeros_(self.proj.weight)
+        if hasattr(self.proj, 'bias') and self.proj.bias is not None:
+            nn.init.zeros_(self.proj.bias)
+    
+    def _apply_pre_layers(self, x: Tensor) -> Tensor:
+        """Apply pre-processing layers"""
+        for layer in self.pre_layers:
+            x = layer(x)
+        return x
+    
+    def _apply_projection(self, x: Tensor) -> Tensor:
+        """Apply main projection - can be overridden by subclasses"""
+        return self.proj(x)
     
     def apply(self, x: Tensor, **kwargs) -> Tensor:
-        return self.sequence(x)
+        """Main forward pass"""
+        x = self._apply_pre_layers(x)
+        x = self._apply_projection(x)
+        return self._post_process(x, **kwargs)
+    
+    def _post_process(self, x: Tensor, **kwargs) -> Tensor:
+        """Post-process the output - can be overridden by subclasses"""
+        return x
     
     @property
     def output_dim(self) -> int:
-        return self.proj.out_features
+        return self.dim_model
+
+
+@ffn_registry.register("post_standard")
+class StandardPostProcessor(BasePostProcessor):
+    """Standard post-processor for feed-forward networks"""
+    pass  # Uses all base functionality
+
+
+@ffn_registry.register("post_regularized", {
+    "weight_decay": (float, Field(default=0.01, description="Weight decay for output layer")),
+    "grad_clip_norm": (float, Field(default=0.0, description="Gradient clipping norm")),
+    "spectral_norm": (bool, Field(default=False, description="Apply spectral normalization"))
+})
+class RegularizedPostProcessor(BasePostProcessor):
+    """Post-processor with regularization techniques for training stability"""
+    
+    def __init__(self, dim_model: int, inner_dim: int, weight_decay: float = 0.01,
+                 grad_clip_norm: float = 0.0, spectral_norm: bool = False, **kwargs):
+        self.weight_decay = weight_decay
+        self.grad_clip_norm = grad_clip_norm
+        self.use_spectral_norm = spectral_norm
+        
+        super().__init__(dim_model, inner_dim, **kwargs)
+        
+        # Apply spectral normalization if requested
+        if spectral_norm:
+            self.proj = nn.utils.spectral_norm(self.proj)
+    
+    def _apply_projection(self, x: Tensor) -> Tensor:
+        """Apply projection with gradient clipping"""
+        # Apply projection
+        output = self.proj(x)
+        
+        # Apply gradient clipping during training
+        if self.training and self.grad_clip_norm > 0:
+            # Register hook for gradient clipping
+            if output.requires_grad:
+                def clip_grad_hook(grad):
+                    if grad is not None:
+                        return torch.clamp(grad, -self.grad_clip_norm, self.grad_clip_norm)
+                    return grad
+                output.register_hook(clip_grad_hook)
+        
+        return output
+    
+    def get_weight_decay_params(self):
+        """Return parameters that should have weight decay applied"""
+        if self.weight_decay > 0:
+            return [self.proj.weight]
+        return []
+
+
+@ffn_registry.register("post_scaled", {
+    "scale_factor": (float, Field(default=1.0, description="Output scaling factor")),
+    "learnable_scale": (bool, Field(default=False, description="Make scale learnable parameter")),
+    "residual_scale": (bool, Field(default=False, description="Scale for residual connection compatibility")),
+    "layer_scale_init": (float, Field(default=1e-4, description="Initial value for learnable layer scale"))
+})
+class ScaledPostProcessor(BasePostProcessor):
+    """Post-processor with output scaling for deep network support"""
+    
+    def __init__(self, dim_model: int, inner_dim: int, scale_factor: float = 1.0,
+                 learnable_scale: bool = False, residual_scale: bool = False,
+                 layer_scale_init: float = 1e-4, **kwargs):
+        super().__init__(dim_model, inner_dim, **kwargs)
+        
+        self.base_scale = scale_factor
+        
+        # Learnable scaling parameters
+        if learnable_scale:
+            self.scale = nn.Parameter(torch.ones(dim_model) * layer_scale_init)
+        else:
+            self.scale = scale_factor
+            
+        # Residual connection scaling (for very deep networks)
+        if residual_scale:
+            self.residual_scale = nn.Parameter(torch.ones(1) * layer_scale_init)
+        else:
+            self.residual_scale = None
+    
+    def _post_process(self, x: Tensor, **kwargs) -> Tensor:
+        """Apply scaling to the output"""
+        # Apply main scaling
+        if isinstance(self.scale, nn.Parameter):
+            x = x * self.scale
+        else:
+            x = x * self.scale
+            
+        # Apply residual scaling if enabled
+        if self.residual_scale is not None:
+            x = x * self.residual_scale
+            
+        return x
+    
+    def set_scale(self, scale: float):
+        """Dynamically adjust the scale factor"""
+        if isinstance(self.scale, nn.Parameter):
+            with torch.no_grad():
+                self.scale.fill_(scale)
+        else:
+            self.scale = scale
