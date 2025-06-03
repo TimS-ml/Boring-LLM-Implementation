@@ -18,41 +18,29 @@ class FFNConfig(ComponentConfig):
     ffn_dim_out: Optional[int] = Field(default=None, description="Output dimension (if None, same as input)")
     mult_dim: float = Field(default=4, description="Multiplier for inner dimension")
     inner_dim: Optional[int] = Field(default=None, description="Inner dimension (if None, input * mult_dim)")
-    post_act_ln: bool = Field(default=False, description="Whether to use LayerNorm after activation")
+    activation: Callable = Field(default=nn.GELU, description="Activation function")
     no_bias: bool = Field(default=False, description="Whether to remove bias")
     dropout: float = Field(default=0.0, description="Dropout probability")
-    zero_init_output: bool = Field(default=False, description="Whether to initialize output to zero")
-    activation: Callable = Field(default=nn.GELU, description="Activation function")
-    
-    # FFN specific fields
-    post_type: str = Field(default="post_standard", description="Post-processor type")
     mult_bias: bool = Field(default=True, description="GLU multiplicative bias")
-    
-    def model_post_init(self, __context):
-        """Post-init processing"""
-        if self.inner_dim is None:
-            self.inner_dim = int(self.dim_model * self.mult_dim)
-        
-        if self.ffn_dim_out is None:
-            self.ffn_dim_out = self.dim_model
 
-
-class MOEConfig(ComponentConfig):
-    """MOE-specific configuration"""
-    ffn_dim_out: Optional[int] = Field(default=None, description="Output dimension (if None, same as input)")
-    mult_dim: float = Field(default=4, description="Multiplier for inner dimension")
-    inner_dim: Optional[int] = Field(default=None, description="Inner dimension (if None, input * mult_dim)")
-    activation: Callable = Field(default=nn.GELU, description="Activation function")
-    no_bias: bool = Field(default=False, description="Whether to remove bias")
-    dropout: float = Field(default=0.0, description="Dropout probability")
+    # Post-processor specific fields
+    post_type: str = Field(default="post_standard", description="Post-processor type")
+    post_act_ln: bool = Field(default=False, description="Whether to use LayerNorm after activation")
+    zero_init_output: bool = Field(default=False, description="Whether to initialize output to zero")
     
     # MOE specific fields
+    router_type: str = Field(default="soft_router", description="MoE Router type (soft_router, hard_router)")
     num_experts: int = Field(default=8, description="Number of experts in MOE")
     expert_inner_dim: Optional[int] = Field(default=None, description="Inner dimension for each expert")
     top_k: int = Field(default=2, description="Number of experts to route to")
     capacity_factor: float = Field(default=1.0, description="Load balancing, 1.25 means each expert can handle up to 25% tokens")
+
+    # Soft router specific fields
     noise_std: float = Field(default=1.0, description="Router noise standard deviation")
-    expert_type: str = Field(default="standard", description="Expert FFN type (standard, glu, etc.)")
+    
+    # Hard router specific fields
+    temperature: float = Field(default=1.0, description="Temperature for hard router Gumbel softmax")
+    straight_through: bool = Field(default=True, description="Use straight-through estimator for hard router")
     
     def model_post_init(self, __context):
         """Post-init processing"""
@@ -71,11 +59,7 @@ class BoringFeedForward(nn.Module):
     
     def __init__(self, config: FFNConfig = None, **kwargs):
         super().__init__()
-        
-        # Handle both config object and direct kwargs
-        config_dict = config.model_dump() if config else {}
-        config_dict.update(kwargs)
-        config = FFNConfig(**config_dict)
+        config = FFNConfig(**kwargs) if not config else config.model_copy(update=kwargs)
         
         # Create main transform strategy
         transform_kwargs = {
@@ -97,60 +81,50 @@ class BoringFeedForward(nn.Module):
             'zero_init_output': config.zero_init_output,
             'no_bias': config.no_bias,
         }
-        
         self.post_processor = ffn_registry.create_strategy(config.post_type, **post_kwargs)
     
     def forward(self, x: Tensor, **kwargs) -> Tensor:
         """Apply FFN transformation"""
         transformed = self.transform.apply(x, **kwargs)
-        return self.post_processor.apply(transformed)
+        return self.post_processor.apply(transformed, **kwargs)
 
 
 class BoringFeedForwardMOE(nn.Module):
     """Mixture of Experts Feed-Forward Network implementation"""
     
-    def __init__(self, config: MOEConfig = None, **kwargs):
+    def __init__(self, config: FFNConfig = None, **kwargs):
         super().__init__()
-        
-        # Handle both config object and direct kwargs
-        config_dict = config.model_dump() if config else {}
-        config_dict.update(kwargs)
-        config = MOEConfig(**config_dict)
+        config = FFNConfig(**kwargs) if not config else config.model_copy(update=kwargs)
         
         self.num_experts = config.num_experts
-        self.top_k = config.top_k
+        self.top_k = config.top_k if config.router_type != "hard_router" else 1
         self.capacity_factor = config.capacity_factor
         self.dim_model = config.dim_model
         
-        # Create router
-        self.router = RouterTransform(
-            dim_model=config.dim_model, 
-            num_experts=config.num_experts, 
-            top_k=config.top_k,
-            noise_std=config.noise_std,
-            no_bias=config.no_bias
-        )
+        # Create router with type-specific parameters
+        router_kwargs = {
+            'dim_model': config.dim_model,
+            'num_experts': config.num_experts,
+            'top_k': config.top_k,
+            'no_bias': config.no_bias,
+        }
+        
+        # Add router-specific parameters
+        if config.router_type == "soft_router":
+            router_kwargs['noise_std'] = config.noise_std
+        elif config.router_type == "hard_router":
+            router_kwargs['temperature'] = config.temperature
+            router_kwargs['straight_through'] = config.straight_through
+        
+        self.router = ffn_registry.create_strategy(config.router_type, **router_kwargs)
         
         # Create experts using BoringFeedForward
-        self.experts = nn.ModuleList([
-            BoringFeedForward(
-                FFNConfig(
-                    type=config.expert_type,
-                    dim_model=config.dim_model,
-                    inner_dim=config.expert_inner_dim,
-                    ffn_dim_out=config.dim_model,  # Expert output should be dim_model
-                    activation=config.activation,
-                    no_bias=config.no_bias,
-                    dropout=config.dropout,
-                    mult_bias=getattr(config, 'mult_bias', True) if config.expert_type == "glu" else True
-                )
-            ) for i in range(config.num_experts)
-        ])
+        self.experts = nn.ModuleList([BoringFeedForward(config) for i in range(config.num_experts)])
         
     def forward(self, x: Tensor, **kwargs) -> Tensor:
         """Sparse MOE forward pass"""
-        B, T, C = x.shape
-        flat_x = x.view(-1, C)  # (B*T, C)
+        batch, seq_len, dim = x.shape
+        flat_x = x.view(-1, dim)
         
         # Get routing decisions
         routing_weights, indices = self.router.apply(flat_x)
@@ -160,7 +134,7 @@ class BoringFeedForwardMOE(nn.Module):
         
         # Apply expert capacity if needed
         if self.capacity_factor < float('inf'):
-            tokens_per_batch = B * T * self.top_k
+            tokens_per_batch = batch * seq_len * self.top_k
             expert_capacity = int((tokens_per_batch / self.num_experts) * self.capacity_factor)
         else:
             expert_capacity = None
@@ -187,7 +161,7 @@ class BoringFeedForwardMOE(nn.Module):
                 # Add to final output
                 final_output.index_add_(0, token_indices, weighted_output)
         
-        return final_output.view(B, T, C)
+        return final_output.view(batch, seq_len, dim)
 
 
 def create_ffn(ffn_type: str = "standard", **kwargs) -> BoringFeedForward:
@@ -205,7 +179,7 @@ def create_ffn(ffn_type: str = "standard", **kwargs) -> BoringFeedForward:
     return BoringFeedForward(config) 
 
 
-def create_moe_ffn(num_experts: int = 8, top_k: int = 2, expert_type: str = "standard", **kwargs) -> BoringFeedForwardMOE:
+def create_moe_ffn(num_experts: int = 8, top_k: int = 2, router_type: str = "soft_router", **kwargs) -> BoringFeedForwardMOE:
     """Convenience function to create Sparse MOE FFN"""
     if 'activation' in kwargs and isinstance(kwargs['activation'], str):
         try:
@@ -216,9 +190,9 @@ def create_moe_ffn(num_experts: int = 8, top_k: int = 2, expert_type: str = "sta
     kwargs.update({
         'num_experts': num_experts,
         'top_k': top_k,
-        'expert_type': expert_type,
+        'router_type': router_type,
     })
-    config = MOEConfig(**kwargs)
+    config = FFNConfig(**kwargs)
     return BoringFeedForwardMOE(config)
 
 
@@ -248,11 +222,12 @@ if __name__ == "__main__":
         mult_dim=4
     )
     
-    # Example 4: MOE FFN with standard experts
-    moe_ffn = create_moe_ffn(
+    # Example 4: MOE FFN with soft router and standard experts
+    moe_soft = create_moe_ffn(
         num_experts=8,
         top_k=2,
-        expert_type="standard",
+        router_type="soft_router",
+        type="standard",  # Expert type
         dim_model=512,
         mult_dim=4,
         activation="SiLU",
@@ -260,25 +235,40 @@ if __name__ == "__main__":
         noise_std=0.1
     )
     
-    # Example 5: MOE FFN with GLU experts
-    moe_glu_ffn = create_moe_ffn(
+    # Example 5: MOE FFN with hard router and standard experts
+    moe_hard = create_moe_ffn(
         num_experts=8,
-        top_k=2,
-        expert_type="glu",
+        top_k=1,  # Hard router typically uses top_k=1
+        router_type="hard_router",
+        type="standard",  # Expert type
         dim_model=512,
         mult_dim=4,
         activation="SiLU",
-        capacity_factor=1.25,
-        noise_std=0.1
+        temperature=0.5,
+        straight_through=True
     )
     
-    # Example 6: MOE FFN with config
-    moe_config = MOEConfig(
+    # Example 6: MOE FFN with GLU experts and hard router
+    moe_glu_hard = create_moe_ffn(
+        num_experts=8,
+        top_k=1,
+        router_type="hard_router",
+        type="glu",  # GLU expert type
+        dim_model=512,
+        mult_dim=4,
+        activation="SiLU",
+        temperature=1.0,
+        straight_through=True
+    )
+    
+    # Example 7: MOE FFN with config
+    moe_config = FFNConfig(
+        type="standard",  # Expert type
         dim_model=512,
         mult_dim=4,
         num_experts=8,
         top_k=2,
-        expert_type="standard",
+        router_type="soft_router",
         activation=nn.SiLU,
         capacity_factor=1.25,
         noise_std=0.1,
@@ -299,11 +289,14 @@ if __name__ == "__main__":
     y3 = ffn3(x)
     print(f"Direct kwargs FFN output: {y3.shape}") 
     
-    y_moe = moe_ffn(x)
-    print(f"MOE FFN with standard experts output: {y_moe.shape}")
+    y_moe_soft = moe_soft(x)
+    print(f"MOE FFN with soft router output: {y_moe_soft.shape}")
     
-    y_moe_glu = moe_glu_ffn(x)
-    print(f"MOE FFN with GLU experts output: {y_moe_glu.shape}")
+    y_moe_hard = moe_hard(x)
+    print(f"MOE FFN with hard router output: {y_moe_hard.shape}")
+    
+    y_moe_glu_hard = moe_glu_hard(x)
+    print(f"MOE FFN with GLU experts and hard router output: {y_moe_glu_hard.shape}")
     
     y_moe_config = moe_ffn_with_config(x)
     print(f"MOE FFN with config output: {y_moe_config.shape}") 
