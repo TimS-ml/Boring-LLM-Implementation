@@ -28,6 +28,17 @@ class FFNConfig(ComponentConfig):
     post_act_ln: bool = Field(default=False, description="Whether to use LayerNorm after activation")
     zero_init_output: bool = Field(default=False, description="Whether to initialize output to zero")
     
+    # RegularizedPostProcessor fields
+    weight_decay: float = Field(default=0.01, description="Weight decay for output layer")
+    grad_clip_norm: float = Field(default=0.0, description="Gradient clipping norm")
+    spectral_norm: bool = Field(default=False, description="Apply spectral normalization")
+    
+    # ScaledPostProcessor fields
+    scale_factor: float = Field(default=1.0, description="Output scaling factor")
+    learnable_scale: bool = Field(default=False, description="Make scale learnable parameter")
+    residual_scale: bool = Field(default=False, description="Scale for residual connection compatibility")
+    layer_scale_init: float = Field(default=1e-4, description="Initial value for learnable layer scale")
+    
     # MOE specific fields
     router_type: str = Field(default="soft_router", description="MoE Router type (soft_router, hard_router)")
     num_experts: int = Field(default=8, description="Number of experts in MOE")
@@ -72,7 +83,7 @@ class BoringFeedForward(nn.Module):
             transform_kwargs['mult_bias'] = config.mult_bias
         self.transform = ffn_registry.create_strategy(config.type, **transform_kwargs)
         
-        # Create post-processor
+        # Create post-processor with type-specific parameters
         post_kwargs = {
             'dim_model': config.ffn_dim_out,
             'inner_dim': self.transform.output_dim,
@@ -81,6 +92,22 @@ class BoringFeedForward(nn.Module):
             'zero_init_output': config.zero_init_output,
             'no_bias': config.no_bias,
         }
+        
+        # Add post-processor specific parameters
+        if config.post_type == "post_regularized":
+            post_kwargs.update({
+                'weight_decay': config.weight_decay,
+                'grad_clip_norm': config.grad_clip_norm,
+                'spectral_norm': config.spectral_norm,
+            })
+        elif config.post_type == "post_scaled":
+            post_kwargs.update({
+                'scale_factor': config.scale_factor,
+                'learnable_scale': config.learnable_scale,
+                'residual_scale': config.residual_scale,
+                'layer_scale_init': config.layer_scale_init,
+            })
+            
         self.post_processor = ffn_registry.create_strategy(config.post_type, **post_kwargs)
     
     def forward(self, x: Tensor, **kwargs) -> Tensor:
@@ -276,6 +303,45 @@ if __name__ == "__main__":
     )
     moe_ffn_with_config = BoringFeedForwardMOE(moe_config)
     
+    # Example 8: RegularizedPostProcessor for training stability
+    ffn_regularized = create_ffn(
+        ffn_type="standard",
+        dim_model=512,
+        mult_dim=4,
+        post_type="post_regularized",
+        weight_decay=0.01,
+        grad_clip_norm=1.0,
+        spectral_norm=True,
+        activation="SiLU"
+    )
+    
+    # Example 9: ScaledPostProcessor for deep networks
+    ffn_scaled = create_ffn(
+        ffn_type="glu",
+        dim_model=512,
+        mult_dim=2,
+        post_type="post_scaled",
+        scale_factor=0.5,
+        learnable_scale=True,
+        residual_scale=True,
+        layer_scale_init=1e-4,
+        activation="SiLU"
+    )
+    
+    # Example 10: MOE with RegularizedPostProcessor
+    moe_regularized = create_moe_ffn(
+        num_experts=8,
+        top_k=2,
+        router_type="soft_router",
+        type="standard",
+        dim_model=512,
+        mult_dim=4,
+        post_type="post_regularized",
+        weight_decay=0.02,
+        spectral_norm=True,
+        activation="SiLU"
+    )
+    
     # Test
     x = torch.randn(2, 10, 512)
     print("Testing FFN implementations...")
@@ -299,4 +365,14 @@ if __name__ == "__main__":
     print(f"MOE FFN with GLU experts and hard router output: {y_moe_glu_hard.shape}")
     
     y_moe_config = moe_ffn_with_config(x)
-    print(f"MOE FFN with config output: {y_moe_config.shape}") 
+    print(f"MOE FFN with config output: {y_moe_config.shape}")
+    
+    # Test new processors
+    y_regularized = ffn_regularized(x)
+    print(f"Regularized FFN output: {y_regularized.shape}")
+    
+    y_scaled = ffn_scaled(x)
+    print(f"Scaled FFN output: {y_scaled.shape}")
+    
+    y_moe_regularized = moe_regularized(x)
+    print(f"MOE with Regularized PostProcessor output: {y_moe_regularized.shape}") 
