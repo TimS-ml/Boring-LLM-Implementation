@@ -20,6 +20,10 @@ class FFNTransform(ComponentTransform):
 ffn_registry = ComponentRegistry[FFNTransform]("FFN")
 
 
+##############################
+# FFN Transform
+##############################
+
 @ffn_registry.register("standard")
 class StandardFFN(FFNTransform):
     """Standard feed-forward transformation"""
@@ -61,7 +65,11 @@ class GLUFFN(FFNTransform):
         return self._inner_dim
 
 
-@ffn_registry.register("router", {
+##############################
+# MoE Router
+##############################
+
+@ffn_registry.register("soft_router", {
     "num_experts": (int, Field(default=8, description="Number of experts")),
     "top_k": (int, Field(default=2, description="Number of experts to route to")),
     "noise_std": (float, Field(default=1.0, description="Noise standard deviation for load balancing"))
@@ -109,6 +117,60 @@ class RouterTransform(FFNTransform):
         return self.num_experts
 
 
+@ffn_registry.register("hard_router", {
+    "num_experts": (int, Field(default=8, description="Number of experts")),
+    "top_k": (int, Field(default=1, description="Number of experts to route to (typically 1 for hard routing)")),
+    "temperature": (float, Field(default=1.0, description="Temperature for Gumbel softmax, usually lower than soft router")),
+    "straight_through": (bool, Field(default=True, description="Use straight-through estimator"))
+})
+class HardRouterTransform(FFNTransform):
+    """Hard Router/Gating network for MOE using discrete routing"""
+    
+    def __init__(self, dim_model: int, num_experts: int = 8, top_k: int = 1, 
+                 temperature: float = 1.0, straight_through: bool = True, 
+                 no_bias: bool = False, **kwargs):
+        super().__init__()
+        self.num_experts = num_experts
+        self.top_k = top_k  # usually 1
+        self.temperature = temperature
+        self.straight_through = straight_through
+        
+        # Main routing layer
+        self.gate = nn.Linear(dim_model, num_experts, bias=not no_bias)
+        
+    def apply(self, x: Tensor, **kwargs) -> tuple:
+        """Returns hard routing weights and indices"""
+        logits = self.gate(x)
+        
+        if self.training and self.straight_through:
+            # Gumbel-Softmax with straight-through estimator
+            gumbel_logits = logits + self._gumbel_noise(logits)
+            soft_weights = F.softmax(gumbel_logits / self.temperature, dim=-1)
+            
+            # Hard selection with straight-through
+            _, indices = torch.topk(soft_weights, self.top_k, dim=-1)
+            hard_weights = torch.zeros_like(logits)
+            hard_weights.scatter_(-1, indices, 1.0)
+            
+            # Straight-through: forward hard, backward soft
+            routing_weights = hard_weights + soft_weights - soft_weights.detach()
+        else:
+            # Pure hard routing for inference
+            _, indices = torch.topk(logits, self.top_k, dim=-1)
+            routing_weights = torch.zeros_like(logits)
+            routing_weights.scatter_(-1, indices, 1.0)
+            
+        return routing_weights, indices
+    
+    def _gumbel_noise(self, logits):
+        uniform = torch.rand_like(logits)
+        return -torch.log(-torch.log(uniform + 1e-20) + 1e-20)
+
+
+##############################
+# Post-processor
+##############################
+
 @ffn_registry.register("post_standard")
 class PostProcessor(FFNTransform):
     """Standard post-processor for feed-forward networks"""
@@ -125,13 +187,12 @@ class PostProcessor(FFNTransform):
             layers.append(nn.Dropout(dropout))
         
         self.proj = nn.Linear(inner_dim, dim_model, bias=not no_bias)
-        layers.append(self.proj)
-        
         if zero_init_output:
             nn.init.zeros_(self.proj.weight)
             if not no_bias:
                 nn.init.zeros_(self.proj.bias)
                 
+        layers.append(self.proj)
         self.sequence = nn.Sequential(*layers)
     
     def apply(self, x: Tensor, **kwargs) -> Tensor:

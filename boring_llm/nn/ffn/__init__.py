@@ -25,7 +25,7 @@ Usage:
     moe_ffn = BoringFeedForwardMOE(moe_config)
 """
 
-from .main import BoringFeedForward, BoringFeedForwardMOE, FFNConfig, MOEConfig, create_ffn, create_moe_ffn
+from .main import BoringFeedForward, BoringFeedForwardMOE, FFNConfig, create_ffn, create_moe_ffn
 from .registry import ffn_registry, FFNTransform
 
 __all__ = [
@@ -33,7 +33,6 @@ __all__ = [
     "BoringFeedForward",
     "BoringFeedForwardMOE",
     "FFNConfig", 
-    "MOEConfig",
     "create_ffn",
     "create_moe_ffn",
     

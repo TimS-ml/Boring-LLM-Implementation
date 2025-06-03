@@ -24,12 +24,7 @@ class BoringPositionalEncoding(nn.Module):
     
     def __init__(self, config: PEConfig = None, **kwargs):
         super().__init__()
-        
-        # Handle both config object and direct kwargs
-        config_dict = config.model_dump() if config else {}
-        config_dict.update(kwargs)
-        config = PEConfig(**config_dict)
-        
+        config = PEConfig(**kwargs) if not config else config.model_copy(update=kwargs)
         self.max_seq_len = config.max_seq_len
         
         # Create strategy
