@@ -142,7 +142,200 @@ class AlibiPositionalEncoding(PETransform):
         seq_len = pos.size(0)
         # Create relative position matrix
         pos_matrix = pos.unsqueeze(0) - pos.unsqueeze(1)  # [seq_len, seq_len]
-        
+
         # Apply slopes to get bias
         bias = pos_matrix.unsqueeze(0) * self.slopes.unsqueeze(-1).unsqueeze(-1)  # [num_heads, seq_len, seq_len]
+        return bias
+
+
+# ============================================================================
+# Advanced Positional Encodings (from x-transformers)
+# ============================================================================
+
+@pe_registry.register("relative_position_bias", {
+    "num_heads": (int, Field(default=8, description="Number of attention heads")),
+    "scale": (float, Field(default=1.0, description="Scale factor for bias")),
+    "causal": (bool, Field(default=False, description="Use causal bias")),
+    "num_buckets": (int, Field(default=32, description="Number of position buckets")),
+    "max_distance": (int, Field(default=128, description="Maximum distance"))
+})
+class RelativePositionBiasEncoding(PETransform):
+    """
+    T5-style relative positional bias
+
+    Adds learned biases to attention logits based on relative distances.
+    Positions are bucketed (nearby use exact buckets, distant use log buckets).
+    """
+
+    def __init__(
+        self,
+        dim_model: int,  # Not used but required by interface
+        num_heads: int = 8,
+        scale: float = 1.0,
+        causal: bool = False,
+        num_buckets: int = 32,
+        max_distance: int = 128,
+        **kwargs
+    ):
+        super().__init__()
+        self.scale = scale
+        self.causal = causal
+        self.num_buckets = num_buckets
+        self.max_distance = max_distance
+        self.relative_attention_bias = nn.Embedding(num_buckets, num_heads)
+
+    @staticmethod
+    def _relative_position_bucket(
+        relative_position: Tensor,
+        causal: bool = True,
+        num_buckets: int = 32,
+        max_distance: int = 128
+    ) -> Tensor:
+        """Translate relative positions to bucket indices"""
+        import math
+
+        ret = 0
+        n = -relative_position
+
+        if not causal:
+            num_buckets //= 2
+            ret += (n < 0).long() * num_buckets
+            n = torch.abs(n)
+        else:
+            n = torch.max(n, torch.zeros_like(n))
+
+        # Half buckets for exact, half for logarithmic
+        max_exact = num_buckets // 2
+        is_small = n < max_exact
+
+        val_if_large = max_exact + (
+            torch.log(n.float() / max_exact) /
+            math.log(max_distance / max_exact) *
+            (num_buckets - max_exact)
+        ).long()
+        val_if_large = torch.min(
+            val_if_large,
+            torch.full_like(val_if_large, num_buckets - 1)
+        )
+
+        ret += torch.where(is_small, n, val_if_large)
+        return ret
+
+    def apply(self, pos: Tensor, seq_len_q: int = None, seq_len_k: int = None, **kwargs) -> Tensor:
+        """
+        Apply relative position bias
+
+        Args:
+            pos: Position indices (not used, lengths from seq_len_q/k)
+            seq_len_q: Query sequence length
+            seq_len_k: Key sequence length
+
+        Returns:
+            Bias tensor of shape [num_heads, seq_len_q, seq_len_k]
+        """
+        device = self.relative_attention_bias.weight.device
+
+        if seq_len_q is None or seq_len_k is None:
+            seq_len = pos.size(0)
+            seq_len_q = seq_len_k = seq_len
+
+        q_pos = torch.arange(seq_len_k - seq_len_q, seq_len_k, dtype=torch.long, device=device)
+        k_pos = torch.arange(seq_len_k, dtype=torch.long, device=device)
+
+        # Compute relative positions
+        rel_pos = k_pos.unsqueeze(0) - q_pos.unsqueeze(1)  # [seq_q, seq_k]
+
+        rp_bucket = self._relative_position_bucket(
+            rel_pos,
+            causal=self.causal,
+            num_buckets=self.num_buckets,
+            max_distance=self.max_distance
+        )
+
+        values = self.relative_attention_bias(rp_bucket)  # [seq_q, seq_k, heads]
+        bias = values.permute(2, 0, 1)  # [heads, seq_q, seq_k]
+
+        return bias * self.scale
+
+
+@pe_registry.register("dynamic_position_bias", {
+    "num_heads": (int, Field(default=8, description="Number of attention heads")),
+    "depth": (int, Field(default=2, description="MLP depth")),
+    "log_distance": (bool, Field(default=False, description="Use log distance")),
+    "use_norm": (bool, Field(default=False, description="Use normalization in MLP"))
+})
+class DynamicPositionBiasEncoding(PETransform):
+    """
+    Dynamic position bias using MLP
+
+    Learns position bias through a small MLP network.
+    """
+
+    def __init__(
+        self,
+        dim_model: int,
+        num_heads: int = 8,
+        depth: int = 2,
+        log_distance: bool = False,
+        use_norm: bool = False,
+        **kwargs
+    ):
+        super().__init__()
+        assert depth >= 1, 'MLP depth must be >= 1'
+
+        self.log_distance = log_distance
+        self.mlp = nn.ModuleList([])
+
+        # First layer
+        layers = [nn.Linear(1, dim_model)]
+        if use_norm:
+            layers.append(nn.LayerNorm(dim_model))
+        layers.append(nn.SiLU())
+        self.mlp.append(nn.Sequential(*layers))
+
+        # Hidden layers
+        for _ in range(depth - 1):
+            layers = [nn.Linear(dim_model, dim_model)]
+            if use_norm:
+                layers.append(nn.LayerNorm(dim_model))
+            layers.append(nn.SiLU())
+            self.mlp.append(nn.Sequential(*layers))
+
+        # Output layer
+        self.mlp.append(nn.Linear(dim_model, num_heads))
+
+    def apply(self, pos: Tensor, seq_len_q: int = None, seq_len_k: int = None, **kwargs) -> Tensor:
+        """
+        Apply dynamic position bias
+
+        Returns:
+            Bias tensor of shape [num_heads, seq_len_q, seq_len_k]
+        """
+        device = self.mlp[0][0].weight.device
+
+        if seq_len_q is None or seq_len_k is None:
+            seq_len = pos.size(0)
+            seq_len_q = seq_len_k = seq_len
+
+        # Create position matrix
+        seq_arange = torch.arange(seq_len_k - seq_len_q, seq_len_k, device=device)
+        context_arange = torch.arange(seq_len_k, device=device)
+        indices = seq_arange.unsqueeze(1) - context_arange.unsqueeze(0)  # [seq_q, seq_k]
+        indices += (seq_len_k - 1)
+
+        # Create continuous positions
+        pos_input = torch.arange(-seq_len_k + 1, seq_len_k, device=device).float()
+        pos_input = pos_input.unsqueeze(-1)  # [2*seq_k-1, 1]
+
+        if self.log_distance:
+            pos_input = torch.sign(pos_input) * torch.log(pos_input.abs() + 1)
+
+        # Pass through MLP
+        for layer in self.mlp:
+            pos_input = layer(pos_input)
+
+        # Get position biases
+        bias = pos_input[indices]  # [seq_q, seq_k, heads]
+        bias = bias.permute(2, 0, 1)  # [heads, seq_q, seq_k]
+
         return bias
