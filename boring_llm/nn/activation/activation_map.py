@@ -25,9 +25,10 @@ def get_activation_by_name(name: str) -> Type[nn.Module]:
 
     # Try custom activation functions
     try:
-        from boring_llm.nn.activation import ReluSquared
+        from boring_llm.nn.activation import ReluSquared, SoLU
         custom_activations = {
             'ReluSquared': ReluSquared,
+            'SoLU': SoLU,
         }
         if name in custom_activations:
             return custom_activations[name]
