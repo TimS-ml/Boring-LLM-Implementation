@@ -15,7 +15,7 @@ from pydantic import Field
 import torch
 import torch.nn as nn
 from torch import Tensor
-from einops import rearrange
+from einops import rearrange, repeat
 
 from boring_llm.base.component_registry import ComponentConfig
 from boring_llm.nn.attention.registry import (
@@ -73,17 +73,21 @@ class AttentionConfig(ComponentConfig):
     # Cross attention
     dim_context: Optional[int] = Field(default=None, description="Context dimension for cross-attention")
 
-    def model_post_init(self, __context):
-        """Post-init processing"""
+    def __init__(self, **data):
+        """Custom init for Pydantic v1/v2 compatibility"""
         # Handle MQA/GQA
-        if self.one_kv_head:
-            self.kv_heads = 1
-        elif self.kv_heads is None:
-            self.kv_heads = self.num_heads
+        if data.get('one_kv_head', False):
+            data['kv_heads'] = 1
+        elif data.get('kv_heads') is None:
+            data['kv_heads'] = data.get('num_heads', 8)
 
-        # Validate
-        assert self.num_heads % self.kv_heads == 0, \
-            f"num_heads ({self.num_heads}) must be divisible by kv_heads ({self.kv_heads})"
+        # Validate before calling super
+        num_heads = data.get('num_heads', 8)
+        kv_heads = data.get('kv_heads', num_heads)
+        assert num_heads % kv_heads == 0, \
+            f"num_heads ({num_heads}) must be divisible by kv_heads ({kv_heads})"
+
+        super().__init__(**data)
 
 
 class BoringMultiHeadAttention(nn.Module):
