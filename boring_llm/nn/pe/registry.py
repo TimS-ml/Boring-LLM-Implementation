@@ -142,7 +142,389 @@ class AlibiPositionalEncoding(PETransform):
         seq_len = pos.size(0)
         # Create relative position matrix
         pos_matrix = pos.unsqueeze(0) - pos.unsqueeze(1)  # [seq_len, seq_len]
-        
+
         # Apply slopes to get bias
         bias = pos_matrix.unsqueeze(0) * self.slopes.unsqueeze(-1).unsqueeze(-1)  # [num_heads, seq_len, seq_len]
+        return bias
+
+
+# ============================================================================
+# Advanced Positional Encodings (from x-transformers)
+# ============================================================================
+
+@pe_registry.register("relative_position_bias", {
+    "num_heads": (int, Field(default=8, description="Number of attention heads")),
+    "scale": (float, Field(default=1.0, description="Scale factor for bias")),
+    "causal": (bool, Field(default=False, description="Use causal bias")),
+    "num_buckets": (int, Field(default=32, description="Number of position buckets")),
+    "max_distance": (int, Field(default=128, description="Maximum distance"))
+})
+class RelativePositionBiasEncoding(PETransform):
+    """
+    T5-style relative positional bias
+
+    Adds learned biases to attention logits based on relative distances.
+    Positions are bucketed (nearby use exact buckets, distant use log buckets).
+    """
+
+    def __init__(
+        self,
+        dim_model: int,  # Not used but required by interface
+        num_heads: int = 8,
+        scale: float = 1.0,
+        causal: bool = False,
+        num_buckets: int = 32,
+        max_distance: int = 128,
+        **kwargs
+    ):
+        super().__init__()
+        import math
+        self.scale = scale
+        self.causal = causal
+        self.num_buckets = num_buckets
+        self.max_distance = max_distance
+        self.math = math  # Store math module
+        self.relative_attention_bias = nn.Embedding(num_buckets, num_heads)
+
+    @staticmethod
+    def _relative_position_bucket(
+        relative_position: Tensor,
+        causal: bool = True,
+        num_buckets: int = 32,
+        max_distance: int = 128,
+        math_module = None
+    ) -> Tensor:
+        """Translate relative positions to bucket indices"""
+        import math as math_lib
+        math_module = math_module or math_lib
+
+        ret = 0
+        n = -relative_position
+
+        if not causal:
+            num_buckets //= 2
+            ret += (n < 0).long() * num_buckets
+            n = torch.abs(n)
+        else:
+            n = torch.max(n, torch.zeros_like(n))
+
+        # Half buckets for exact, half for logarithmic
+        max_exact = num_buckets // 2
+        is_small = n < max_exact
+
+        val_if_large = max_exact + (
+            torch.log(n.float() / max_exact) /
+            math_module.log(max_distance / max_exact) *
+            (num_buckets - max_exact)
+        ).long()
+        val_if_large = torch.min(
+            val_if_large,
+            torch.full_like(val_if_large, num_buckets - 1)
+        )
+
+        ret += torch.where(is_small, n, val_if_large)
+        return ret
+
+    def apply(self, pos: Tensor, seq_len_q: int = None, seq_len_k: int = None, **kwargs) -> Tensor:
+        """
+        Apply relative position bias
+
+        Args:
+            pos: Position indices (not used, lengths from seq_len_q/k)
+            seq_len_q: Query sequence length
+            seq_len_k: Key sequence length
+
+        Returns:
+            Bias tensor of shape [num_heads, seq_len_q, seq_len_k]
+        """
+        device = self.relative_attention_bias.weight.device
+
+        if seq_len_q is None or seq_len_k is None:
+            seq_len = pos.size(0)
+            seq_len_q = seq_len_k = seq_len
+
+        q_pos = torch.arange(seq_len_k - seq_len_q, seq_len_k, dtype=torch.long, device=device)
+        k_pos = torch.arange(seq_len_k, dtype=torch.long, device=device)
+
+        # Compute relative positions
+        rel_pos = k_pos.unsqueeze(0) - q_pos.unsqueeze(1)  # [seq_q, seq_k]
+
+        rp_bucket = self._relative_position_bucket(
+            rel_pos,
+            causal=self.causal,
+            num_buckets=self.num_buckets,
+            max_distance=self.max_distance,
+            math_module=self.math
+        )
+
+        values = self.relative_attention_bias(rp_bucket)  # [seq_q, seq_k, heads]
+        bias = values.permute(2, 0, 1)  # [heads, seq_q, seq_k]
+
+        return bias * self.scale
+
+
+@pe_registry.register("dynamic_position_bias", {
+    "num_heads": (int, Field(default=8, description="Number of attention heads")),
+    "depth": (int, Field(default=2, description="MLP depth")),
+    "log_distance": (bool, Field(default=False, description="Use log distance")),
+    "use_norm": (bool, Field(default=False, description="Use normalization in MLP"))
+})
+class DynamicPositionBiasEncoding(PETransform):
+    """
+    Dynamic position bias using MLP
+
+    Learns position bias through a small MLP network.
+    """
+
+    def __init__(
+        self,
+        dim_model: int,
+        num_heads: int = 8,
+        depth: int = 2,
+        log_distance: bool = False,
+        use_norm: bool = False,
+        **kwargs
+    ):
+        super().__init__()
+        assert depth >= 1, 'MLP depth must be >= 1'
+
+        self.log_distance = log_distance
+        self.mlp = nn.ModuleList([])
+
+        # First layer
+        layers = [nn.Linear(1, dim_model)]
+        if use_norm:
+            layers.append(nn.LayerNorm(dim_model))
+        layers.append(nn.SiLU())
+        self.mlp.append(nn.Sequential(*layers))
+
+        # Hidden layers
+        for _ in range(depth - 1):
+            layers = [nn.Linear(dim_model, dim_model)]
+            if use_norm:
+                layers.append(nn.LayerNorm(dim_model))
+            layers.append(nn.SiLU())
+            self.mlp.append(nn.Sequential(*layers))
+
+        # Output layer
+        self.mlp.append(nn.Linear(dim_model, num_heads))
+
+    def apply(self, pos: Tensor, seq_len_q: int = None, seq_len_k: int = None, **kwargs) -> Tensor:
+        """
+        Apply dynamic position bias
+
+        Returns:
+            Bias tensor of shape [num_heads, seq_len_q, seq_len_k]
+        """
+        device = self.mlp[0][0].weight.device
+
+        if seq_len_q is None or seq_len_k is None:
+            seq_len = pos.size(0)
+            seq_len_q = seq_len_k = seq_len
+
+        # Create position matrix
+        seq_arange = torch.arange(seq_len_k - seq_len_q, seq_len_k, device=device)
+        context_arange = torch.arange(seq_len_k, device=device)
+        indices = seq_arange.unsqueeze(1) - context_arange.unsqueeze(0)  # [seq_q, seq_k]
+        indices += (seq_len_k - 1)
+
+        # Create continuous positions
+        pos_input = torch.arange(-seq_len_k + 1, seq_len_k, device=device).float()
+        pos_input = pos_input.unsqueeze(-1)  # [2*seq_k-1, 1]
+
+        if self.log_distance:
+            pos_input = torch.sign(pos_input) * torch.log(pos_input.abs() + 1)
+
+        # Pass through MLP
+        for layer in self.mlp:
+            pos_input = layer(pos_input)
+
+        # Get position biases
+        bias = pos_input[indices]  # [seq_q, seq_k, heads]
+        bias = bias.permute(2, 0, 1)  # [heads, seq_q, seq_k]
+
+        return bias
+
+
+@pe_registry.register("cope", {
+    "num_heads": (int, Field(default=8, description="Number of attention heads")),
+    "max_pos": (int, Field(default=16, description="Maximum position value")),
+    "soft_onehot": (bool, Field(default=False, description="Use soft one-hot encoding")),
+    "talking_heads": (bool, Field(default=False, description="Use talking heads")),
+    "soft_onehot_temp": (float, Field(default=5e-2, description="Temperature for soft one-hot"))
+})
+class CoPEEncoding(PETransform):
+    """
+    Contextual Position Encoding (CoPE)
+
+    From: https://arxiv.org/abs/2405.18719
+
+    Computes positions based on attention patterns, allowing the model to
+    count contextually relevant tokens rather than absolute positions.
+
+    Note: This is typically used within attention mechanism, not as standalone PE.
+    """
+
+    def __init__(
+        self,
+        dim_model: int,
+        num_heads: int = 8,
+        max_pos: int = 16,
+        soft_onehot: bool = False,
+        talking_heads: bool = False,
+        soft_onehot_temp: float = 5e-2,
+        **kwargs
+    ):
+        super().__init__()
+        # dim_model here is actually dim_head when used in attention
+        dim_head = dim_model // num_heads if dim_model > num_heads else dim_model
+
+        self.max_pos = max_pos
+        self.num_heads = num_heads
+        self.pos_emb = nn.Parameter(torch.zeros(max_pos, dim_head))
+
+        self.talking_heads = nn.Conv2d(num_heads, num_heads, 1, bias=False) if talking_heads else None
+        self.soft_onehot = soft_onehot
+        self.soft_onehot_temp = soft_onehot_temp
+
+        if soft_onehot:
+            self.register_buffer('positions', torch.arange(max_pos))
+
+    def apply(self, pos: Tensor, query: Tensor = None, attn_logits: Tensor = None, **kwargs) -> Tensor:
+        """
+        Apply CoPE
+
+        Args:
+            pos: Position indices (not used)
+            query: Query tensor [batch, heads, seq, dim_head]
+            attn_logits: Attention logits before softmax [batch, heads, seq_q, seq_k]
+
+        Returns:
+            Position embeddings to add to attention logits
+        """
+        if query is None or attn_logits is None:
+            raise ValueError("CoPE requires 'query' and 'attn_logits' arguments")
+
+        if self.talking_heads is not None:
+            i, j = attn_logits.shape[-2:]
+            causal_mask = attn_logits.new_ones(i, j).triu(j - i + 1).bool()
+
+            attn_logits = self.talking_heads(attn_logits)
+            attn_logits = attn_logits.masked_fill(causal_mask, -torch.finfo(attn_logits.dtype).max)
+
+        # Compute contextual positions using cumulative gating
+        gates = attn_logits.sigmoid()
+
+        # Count backward from each position
+        pos_computed = gates.flip(-1).cumsum(dim=-1).flip(-1)
+        pos_computed = pos_computed.clamp(max=self.max_pos - 1)
+
+        # Project queries to position logits
+        logits_int = torch.einsum('b h n d, p d -> b h n p', query, self.pos_emb)
+
+        if self.soft_onehot:
+            # Soft interpolation
+            import torch.nn.functional as F
+            diff_pos = (pos_computed.unsqueeze(-1) - self.positions.unsqueeze(0).unsqueeze(0).unsqueeze(0)).abs()
+            soft_onehot_pos = F.softmax(-diff_pos / self.soft_onehot_temp, dim=-1)
+            cope_pos_emb = torch.einsum('b h i j p, b h i p -> b h i j', soft_onehot_pos, logits_int)
+        else:
+            # Linear interpolation between integer positions
+            pos_ceil = pos_computed.ceil().long()
+            pos_floor = pos_computed.floor().long()
+            logits_ceil = logits_int.gather(-1, pos_ceil)
+            logits_floor = logits_int.gather(-1, pos_floor)
+
+            w = pos_computed - pos_floor.float()
+            cope_pos_emb = logits_ceil * w + logits_floor * (1 - w)
+
+        return cope_pos_emb
+
+
+@pe_registry.register("data_dependent_alibi", {
+    "num_heads": (int, Field(default=8, description="Number of attention heads")),
+    "causal": (bool, Field(default=True, description="Use causal masking")),
+    "bias_init": (float, Field(default=5., description="Initial bias value")),
+    "post_log_scale": (float, Field(default=1., description="Scale after log"))
+})
+class DataDependentAlibiEncoding(PETransform):
+    """
+    Data-Dependent ALiBi from https://openreview.net/forum?id=q2Lnyegkr8
+
+    Learns position-dependent forget gates based on the input.
+    """
+
+    def __init__(
+        self,
+        dim_model: int,
+        num_heads: int = 8,
+        causal: bool = True,
+        bias_init: float = 5.,
+        post_log_scale: float = 1.,
+        **kwargs
+    ):
+        super().__init__()
+        from einops.layers.torch import Rearrange
+
+        self.causal = causal
+        self.post_log_scale = post_log_scale
+
+        linear = nn.Linear(dim_model, num_heads * (1 if causal else 2))
+
+        self.to_forget_gates = nn.Sequential(
+            linear,
+            Rearrange('b n h -> b h n'),
+            nn.LogSigmoid()
+        )
+
+        nn.init.constant_(linear.bias, bias_init)
+
+    def apply(self, pos: Tensor, x: Tensor = None, **kwargs) -> Tensor:
+        """
+        Apply data-dependent ALiBi
+
+        Args:
+            pos: Position indices (not used)
+            x: Input tensor [batch, seq, dim]
+
+        Returns:
+            Position bias [batch, heads, seq, seq]
+        """
+        if x is None:
+            raise ValueError("Data-dependent ALiBi requires 'x' argument")
+
+        bidirectional = not self.causal
+
+        forget_gates = self.to_forget_gates(x)  # [batch, heads, seq]
+
+        if bidirectional:
+            forget_gates_fwd, forget_gates_bwd = forget_gates.chunk(2, dim=1)
+        else:
+            forget_gates_fwd = forget_gates
+
+        # Compute cumulative products (positions)
+        log_cumsum_fwd = torch.logcumsumexp(forget_gates_fwd, dim=-1)
+
+        # Create position bias matrix
+        bias_fwd = log_cumsum_fwd.unsqueeze(-1) - log_cumsum_fwd.unsqueeze(-2)
+        bias_fwd = bias_fwd * self.post_log_scale
+
+        if bidirectional:
+            log_cumsum_bwd = torch.logcumsumexp(forget_gates_bwd.flip(-1), dim=-1).flip(-1)
+            bias_bwd = log_cumsum_bwd.unsqueeze(-1) - log_cumsum_bwd.unsqueeze(-2)
+            bias_bwd = bias_bwd * self.post_log_scale
+
+            # Combine forward and backward
+            bias = torch.where(
+                torch.arange(x.shape[1], device=x.device).unsqueeze(0) <
+                torch.arange(x.shape[1], device=x.device).unsqueeze(1),
+                bias_fwd,
+                bias_bwd
+            )
+        else:
+            bias = bias_fwd
+            # Apply causal masking
+            causal_mask = torch.ones_like(bias, dtype=torch.bool).triu(1)
+            bias = bias.masked_fill(causal_mask, 0)
+
         return bias
