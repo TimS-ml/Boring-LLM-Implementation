@@ -10,6 +10,11 @@ Implemented all components from scratch (normalization layers, CUDA acceleration
 
 (WIP) Developing CUDA acceleration modules.
 
+## Docs
+
+- Paper notes: `docs/relu-squared.md`
+- Architecture / patterns: `docs/design-docs/ROADMAP.md`
+
 
 # Install
 ```bash
