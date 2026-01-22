@@ -207,6 +207,58 @@ class DynamicTanhTransform(NormTransform):
         return (x * pre_tanh_scale).tanh() * gamma + self.beta
 
 
+@norm_registry.register("derf", {
+    "init_alpha": (float, Field(default=0.5, description="Initial pre-erf scaling parameter")),
+    "init_bias": (float, Field(default=0., description="Initial bias before erf")),
+    "unit_offset": (bool, Field(default=False, description="Use unit offset for identity-like initial behavior"))
+})
+class DerfTransform(NormTransform):
+    """
+    Derf (Derivative of Error Function) Normalization
+    Paper: https://arxiv.org/abs/2512.10938
+
+    Uses the error function (erf) as the activation, which is the integral of the
+    Gaussian distribution. The erf function has smooth, bounded behavior similar to
+    tanh but with different gradient characteristics that may be beneficial for training.
+
+    The error function is defined as: erf(x) = (2/√π) * ∫₀ˣ e^(-t²) dt
+
+    This applies learnable scaling and shifting both before and after the erf:
+    Forward computation: erf(x * alpha + s) * gamma + beta
+
+    Args:
+        dim_model: Feature dimension (for per-dimension gamma and beta parameters)
+        init_alpha: Initial value for the pre-erf scaling parameter (default: 0.5)
+        init_bias: Initial value for the shift term 's' applied before erf (default: 0.0)
+        unit_offset: If True, uses unit initialization for identity-like initial behavior
+    """
+
+    def __init__(
+        self,
+        dim_model: int,
+        init_alpha: float = 0.5,
+        init_bias: float = 0.,
+        unit_offset: bool = False,
+        **kwargs
+    ):
+        super().__init__()
+        scale_offset = 1. if unit_offset else 0.
+
+        self.alpha = nn.Parameter(torch.tensor(init_alpha) - scale_offset)
+        self.s = nn.Parameter(torch.tensor(init_bias))
+
+        self.gamma = nn.Parameter(torch.ones(dim_model) - scale_offset)
+        self.beta = nn.Parameter(torch.zeros(dim_model))
+
+        self.scale_offset = scale_offset
+
+    def apply(self, x: Tensor, **kwargs) -> Tensor:
+        """Apply Derf normalization"""
+        x = x * (self.alpha + self.scale_offset) + self.s
+        activated = torch.erf(x)
+        return activated * (self.gamma + self.scale_offset) + self.beta
+
+
 # Utility function for L2 normalization (keep existing)
 def l2norm(t: Tensor, groups: int = 1) -> Tensor:
     """Apply L2 normalization across groups of features"""

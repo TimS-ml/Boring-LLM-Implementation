@@ -26,11 +26,11 @@ class ConnectionConfig(ComponentConfig):
     scale_residual: bool = Field(default=False, description="Use learnable residual scaling")
     scale_residual_constant: float = Field(default=1., description="Constant residual scale")
 
-    # HyperConnection fields
+    # HyperConnection fields (mHC - manifold constrained)
     layer_index: int = Field(default=0, description="Current layer index")
     num_residual_streams: int = Field(default=4, description="Number of residual streams")
     num_input_views: int = Field(default=1, description="Number of input views")
-    use_tanh: bool = Field(default=True, description="Use tanh activation")
+    sinkhorn_iters: int = Field(default=5, description="Number of Sinkhorn iterations for manifold constraint")
 
     # LayerScale fields
     init_value: float = Field(default=0., description="Initial scale value")
@@ -95,7 +95,7 @@ class BoringConnection(nn.Module):
                 'layer_index': config.layer_index,
                 'num_residual_streams': config.num_residual_streams,
                 'num_input_views': config.num_input_views,
-                'use_tanh': config.use_tanh
+                'sinkhorn_iters': config.sinkhorn_iters
             })
         elif config.type == "layer_scale":
             strategy_kwargs.update({

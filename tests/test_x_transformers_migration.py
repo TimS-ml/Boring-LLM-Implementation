@@ -73,6 +73,20 @@ def test_normalization():
     assert y8.shape == x.shape
     print("✓ DynamicTanh")
 
+    # Test DERF (new - from x-transformers Dec 2025)
+    norm9 = create_norm("derf", dim_model=dim, init_alpha=0.5, init_bias=0.)
+    y9 = norm9(x)
+    assert y9.shape == x.shape
+    # DERF uses erf which is bounded [-1, 1], so output should be bounded
+    assert y9.abs().max() < 100, "DERF output should be reasonably bounded"
+    print("✓ DERF (erf-based normalization)")
+
+    # Test DERF with unit_offset
+    norm10 = create_norm("derf", dim_model=dim, init_alpha=0.5, unit_offset=True)
+    y10 = norm10(x)
+    assert y10.shape == x.shape
+    print("✓ DERF with unit_offset")
+
     print("All normalization tests passed! ✓")
 
 
@@ -146,6 +160,40 @@ def test_connections():
     y6 = conn6(x)
     assert y6.shape == x.shape
     print("✓ ShiftTokens")
+
+    # Test HyperConnection with mHC (manifold constrained - from x-transformers Jan 2026)
+    from boring_llm.nn.connections.registry import sinkhorn
+    num_streams = 4
+    # Test the sinkhorn function first
+    test_matrix = torch.randn(batch, seq, num_streams, num_streams)
+    doubly_stochastic = sinkhorn(test_matrix, iters=10)
+    # Check rows sum to ~1
+    row_sums = doubly_stochastic.sum(dim=-1)
+    assert torch.allclose(row_sums, torch.ones_like(row_sums), atol=0.1), \
+        f"Sinkhorn rows should sum to 1: {row_sums.mean()}"
+    # Check cols sum to ~1
+    col_sums = doubly_stochastic.sum(dim=-2)
+    assert torch.allclose(col_sums, torch.ones_like(col_sums), atol=0.1), \
+        f"Sinkhorn cols should sum to 1: {col_sums.mean()}"
+    print("✓ Sinkhorn-Knopp algorithm")
+
+    # Test HyperConnection
+    conn7 = create_connection("hyper_connection", dim_model=dim, layer_index=0,
+                              num_residual_streams=num_streams, sinkhorn_iters=5)
+    # HyperConnection expects residuals in shape (b*s, n, d)
+    hc_residuals = torch.randn(batch * num_streams, seq, dim)
+    branch_input, new_residuals, extra = conn7.prepare(hc_residuals)
+    assert branch_input.shape == (batch, seq, dim), f"Branch input shape: {branch_input.shape}"
+    assert new_residuals.shape == (batch, seq, num_streams, dim), \
+        f"Residuals shape: {new_residuals.shape}"
+    assert 'beta' in extra, "Should have beta in extra kwargs"
+    print("✓ HyperConnection with mHC (manifold constraints)")
+
+    # Test HyperConnection forward (calls apply internally)
+    layer_output = torch.randn(batch, seq, dim)
+    y7 = conn7(layer_output, residuals=new_residuals, beta=extra['beta'])
+    assert y7.shape == (batch * num_streams, seq, dim), f"HyperConnection output shape: {y7.shape}"
+    print("✓ HyperConnection forward")
 
     print("All connection tests passed! ✓")
 
@@ -228,17 +276,17 @@ def test_positional_encoding():
     num_heads = 8
     x = torch.randn(batch, seq, dim)
 
-    # Test Relative Position Bias
+    # Test Relative Position Bias (use pe_strategy.apply to access strategy method)
     pe1 = create_pe("relative_position_bias", dim_model=dim, num_heads=num_heads,
                    causal=True, num_buckets=32)
-    bias1 = pe1.apply(torch.arange(seq), seq_len_q=seq, seq_len_k=seq)
+    bias1 = pe1.pe_strategy.apply(torch.arange(seq), seq_len_q=seq, seq_len_k=seq)
     assert bias1.shape == (num_heads, seq, seq)
     print("✓ Relative Position Bias")
 
     # Test Dynamic Position Bias
     pe2 = create_pe("dynamic_position_bias", dim_model=dim, num_heads=num_heads,
                    depth=2, log_distance=False)
-    bias2 = pe2.apply(torch.arange(seq), seq_len_q=seq, seq_len_k=seq)
+    bias2 = pe2.pe_strategy.apply(torch.arange(seq), seq_len_q=seq, seq_len_k=seq)
     assert bias2.shape == (num_heads, seq, seq)
     print("✓ Dynamic Position Bias")
 
@@ -246,16 +294,44 @@ def test_positional_encoding():
     pe3 = create_pe("cope", dim_model=dim, num_heads=num_heads, max_pos=16)
     query = torch.randn(batch, num_heads, seq, dim // num_heads)
     attn_logits = torch.randn(batch, num_heads, seq, seq)
-    bias3 = pe3.apply(torch.arange(seq), query=query, attn_logits=attn_logits)
+    bias3 = pe3.pe_strategy.apply(torch.arange(seq), query=query, attn_logits=attn_logits)
     assert bias3.shape == (batch, num_heads, seq, seq)
     print("✓ CoPE")
 
     # Test Data-Dependent ALiBi
     pe4 = create_pe("data_dependent_alibi", dim_model=dim, num_heads=num_heads,
                    causal=True)
-    bias4 = pe4.apply(torch.arange(seq), x=x)
+    bias4 = pe4.pe_strategy.apply(torch.arange(seq), x=x)
     assert bias4.shape == (batch, num_heads, seq, seq)
     print("✓ Data-Dependent ALiBi")
+
+    # Test PoPE (Polar Positional Encoding - new from x-transformers Dec 2025)
+    from boring_llm.nn.pe.registry import apply_polar_pos_emb, PolarPositionalEncoding
+    import math
+    dim_head = 64
+    # Create strategy directly to test PoPE
+    pe5_strategy = PolarPositionalEncoding(dim_model=dim_head, num_heads=num_heads, bias_uniform_init=False)
+    pos = torch.arange(seq).float().unsqueeze(0)  # [1, seq]
+    freqs, bias = pe5_strategy.apply(pos)
+    assert freqs.shape == (1, seq, dim_head), f"PoPE freqs shape: {freqs.shape}"
+    assert bias.shape == (num_heads, 1, dim_head), f"PoPE bias shape: {bias.shape}"
+    print("✓ PoPE (Polar Positional Encoding)")
+
+    # Test PoPE apply_to_qk
+    q = torch.randn(batch, num_heads, seq, dim_head)
+    k = torch.randn(batch, num_heads, seq, dim_head)
+    # Note: apply_polar_pos_emb doubles the dimension
+    q_polar = apply_polar_pos_emb(q, freqs)
+    k_polar = apply_polar_pos_emb(k, freqs + bias)
+    assert q_polar.shape[-1] == dim_head * 2, f"PoPE doubles dim: {q_polar.shape}"
+    print("✓ PoPE apply_to_qk")
+
+    # Test PoPE with bias_uniform_init
+    pe6_strategy = PolarPositionalEncoding(dim_model=dim_head, num_heads=num_heads, bias_uniform_init=True)
+    freqs6, bias6 = pe6_strategy.apply(pos)
+    # Check bias is initialized in [-2π, 0]
+    assert (bias6 >= -2 * math.pi).all() and (bias6 <= 0).all(), "Bias should be in [-2π, 0]"
+    print("✓ PoPE with uniform bias init")
 
     print("All positional encoding tests passed! ✓")
 

@@ -1,8 +1,12 @@
 from typing import Optional
+import math
 from pydantic import Field
 import torch
 import torch.nn as nn
-from torch import Tensor
+import torch.nn.functional as F
+from torch import Tensor, cat
+from torch.amp import autocast
+from einops import rearrange
 
 from boring_llm.base.component_registry import ComponentTransform, ComponentRegistry
 from boring_llm.nn.norm.norm import l2norm
@@ -528,3 +532,134 @@ class DataDependentAlibiEncoding(PETransform):
             bias = bias.masked_fill(causal_mask, 0)
 
         return bias
+
+
+# ============================================================================
+# Polar Positional Encoding (PoPE)
+# ============================================================================
+
+@autocast('cuda', enabled=False)
+def apply_polar_pos_emb(t: Tensor, freqs: Tensor) -> Tensor:
+    """
+    Apply Polar Position Embedding to input tensor.
+    Paper: https://arxiv.org/abs/2509.10534
+
+    This function converts the input tensor into polar coordinates using the provided
+    frequency encodings. The key steps are:
+    1. Apply softplus to ensure non-negative magnitudes (r ≥ 0)
+    2. Compute polar coordinates: (r*cos(θ), r*sin(θ))
+
+    The softplus activation ensures the magnitude is always positive, which is a
+    requirement for proper polar coordinate representation.
+
+    Args:
+        t: Input tensor of shape (..., seq_len, dim)
+        freqs: Frequency tensor from PolarEmbedding.forward()
+
+    Returns:
+        Tensor with polar position encoding applied, shape (..., seq_len, 2*dim)
+        where the output dimension is doubled due to (cos, sin) concatenation
+    """
+    rot_dim, seq_len, orig_dtype = freqs.shape[-1], t.shape[-2], t.dtype
+    freqs = freqs[:, -seq_len:]
+
+    t = t.float()
+
+    # Apply softplus to ensure non-negative magnitude for polar coordinates
+    t = F.softplus(t)
+    # Convert to polar: concatenate (r*cos(θ), r*sin(θ))
+    out = cat((t * freqs.cos(), t * freqs.sin()), dim=-1)
+
+    return out.type(orig_dtype)
+
+
+@pe_registry.register("polar", {
+    "num_heads": (int, Field(default=8, description="Number of attention heads (for per-head learned bias)")),
+    "bias_uniform_init": (bool, Field(default=False, description="Initialize bias uniformly in [-2π, 0]")),
+    "base": (int, Field(default=10000, description="Base for computing inverse frequencies"))
+})
+class PolarPositionalEncoding(PETransform):
+    """
+    Polar Position Embedding (PoPE)
+    Paper: "Polar Positional Encoding for Length Extrapolation" https://arxiv.org/abs/2509.10534
+    Authors: Gopalakrishnan et al.
+
+    PoPE is a novel positional encoding scheme designed for better length extrapolation in
+    transformers. Instead of using standard sine/cosine embeddings, PoPE uses polar coordinates
+    where position information is encoded as:
+    - Magnitude: learned and can be adjusted per-head via learned bias
+    - Phase: based on position using inverse frequencies (similar to RoPE)
+
+    The key innovation is using polar coordinates (r, θ) instead of Cartesian (x, y),
+    which provides better inductive bias for capturing relative positions and enables
+    models to extrapolate to longer sequences than seen during training.
+
+    Each attention head can learn its own bias term (phase shift in [-2π, 0]) to
+    customize the positional encoding behavior, allowing different heads to focus on
+    different positional relationships.
+
+    Args:
+        dim_model: Dimension of the positional encoding (usually head_dim)
+        num_heads: Number of attention heads (for per-head learned bias)
+        bias_uniform_init: If True, initialize learned bias uniformly in [-2π, 0]
+                          instead of zeros (default: False)
+        base: Base for computing inverse frequencies, similar to RoPE (default: 10000)
+    """
+
+    def __init__(
+        self,
+        dim_model: int,
+        num_heads: int = 8,
+        bias_uniform_init: bool = False,
+        base: int = 10000,
+        **kwargs
+    ):
+        super().__init__()
+        inv_freq = 1. / (base ** (torch.arange(0, dim_model).float() / dim_model))
+        self.register_buffer('inv_freq', inv_freq)
+
+        self.learned_bias = nn.Parameter(torch.zeros(num_heads, 1, dim_model))
+
+        if bias_uniform_init:
+            self.learned_bias.data.uniform_(-2. * math.pi, 0.)
+
+    @autocast('cuda', enabled=False)
+    def apply(self, pos: Tensor, offset: int = 0, **kwargs) -> tuple[Tensor, Tensor]:
+        """
+        Compute polar positional embedding frequencies and bias.
+
+        Args:
+            pos: Position indices tensor
+            offset: Position offset (default: 0)
+
+        Returns:
+            Tuple of (freqs, bias) where:
+            - freqs: Frequency tensor for polar encoding
+            - bias: Per-head learned bias clamped to [-2π, 0]
+        """
+        if pos.ndim == 1:
+            pos = rearrange(pos, 'n -> 1 n')
+
+        freqs = torch.einsum('b i , j -> b i j', pos.type_as(self.inv_freq), self.inv_freq)
+
+        bias = self.learned_bias.clamp(-2. * math.pi, 0.)
+
+        return freqs, bias
+
+    @staticmethod
+    def apply_to_qk(q: Tensor, k: Tensor, freqs: Tensor, bias: Tensor) -> tuple[Tensor, Tensor]:
+        """
+        Apply polar positional encoding to query and key tensors.
+
+        Args:
+            q: Query tensor
+            k: Key tensor
+            freqs: Frequencies from apply()
+            bias: Bias from apply()
+
+        Returns:
+            Tuple of (q_polar, k_polar) with polar encoding applied
+        """
+        q = apply_polar_pos_emb(q, freqs)
+        k = apply_polar_pos_emb(k, freqs + bias)
+        return q, k

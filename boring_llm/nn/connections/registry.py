@@ -3,7 +3,8 @@ from pydantic import Field
 import math
 import torch
 import torch.nn as nn
-from torch import Tensor, cat, stack
+import torch.nn.functional as F
+from torch import Tensor, cat, stack, einsum
 from torch.nn import Module
 from einops import rearrange
 
@@ -19,6 +20,38 @@ class ConnectionTransform(ComponentTransform):
 
 
 connection_registry = ComponentRegistry[ConnectionTransform]("Connection")
+
+
+# ============================================================================
+# Utility Functions
+# ============================================================================
+
+def sinkhorn(t: Tensor, iters: int = 20) -> Tensor:
+    """
+    Sinkhorn-Knopp algorithm for doubly stochastic matrix normalization.
+    Paper: https://arxiv.org/abs/2512.24880 (Manifold constrained mixing)
+
+    This iteratively normalizes a matrix to make it doubly stochastic
+    (rows and columns both sum to 1), which provides a manifold constraint
+    for the mixing matrices in HyperConnections.
+
+    Args:
+        t: Input tensor to normalize
+        iters: Number of Sinkhorn iterations (default: 20)
+
+    Returns:
+        Doubly stochastic matrix
+    """
+    dtype = t.dtype
+    t = t.float()
+
+    t = t.softmax(dim=-2)
+
+    for _ in range(iters):
+        t = F.normalize(t, p=1, dim=-1)
+        t = F.normalize(t, p=1, dim=-2)
+
+    return t.to(dtype)
 
 
 # ============================================================================
@@ -93,13 +126,25 @@ class GRUGatingTransform(ConnectionTransform):
     "layer_index": (int, Field(default=0, description="Index of current layer")),
     "num_residual_streams": (int, Field(default=4, description="Number of residual streams")),
     "num_input_views": (int, Field(default=1, description="Number of input views")),
-    "use_tanh": (bool, Field(default=True, description="Use tanh activation"))
+    "sinkhorn_iters": (int, Field(default=5, description="Number of Sinkhorn iterations for manifold constraint"))
 })
 class HyperConnectionTransform(ConnectionTransform):
     """
-    Hyper-connections from https://arxiv.org/abs/2409.19606
+    Hyper-connections with Manifold Constraints (mHC)
 
-    Dynamic multi-stream residual connections with learned mixing.
+    Original paper: https://arxiv.org/abs/2409.19606
+    Appendix J - Algorithm 2, Dynamic only
+
+    mHC extension: https://arxiv.org/abs/2512.24880
+    "Manifold constrained" mixing matrices from DeepSeek
+
+    This implementation adds manifold constraints via:
+    - Sigmoid constraint on input mixing (Hpre)
+    - Sinkhorn-Knopp constraint on residual mixing (doubly stochastic)
+    - Sigmoid constraint on output mixing (Hpost)
+
+    These constraints help stabilize training and improve the learned
+    multi-stream residual connections.
     """
 
     def __init__(
@@ -108,17 +153,17 @@ class HyperConnectionTransform(ConnectionTransform):
         layer_index: int = 0,
         num_residual_streams: int = 4,
         num_input_views: int = 1,
-        use_tanh: bool = True,
+        sinkhorn_iters: int = 5,
         **kwargs
     ):
         super().__init__()
 
-        self.act = nn.Tanh() if use_tanh else nn.Identity()
         self.norm = nn.LayerNorm(dim_model, bias=False)
 
         self.num_residual_streams = num_residual_streams
         self.layer_index = layer_index
         self.num_input_views = num_input_views
+        self.sinkhorn_iters = sinkhorn_iters
 
         self.static_beta = nn.Parameter(torch.ones(num_residual_streams))
 
@@ -138,23 +183,40 @@ class HyperConnectionTransform(ConnectionTransform):
         self.dynamic_beta_scale = nn.Parameter(torch.ones(()) * 1e-2)
 
     def prepare(self, residuals: Tensor):
-        """Prepare residuals for hyper-connection"""
+        """Prepare residuals for hyper-connection with manifold constraints"""
+        views = self.num_input_views
+        streams = self.num_residual_streams
+
         residuals = rearrange(residuals, '(b s) n d -> b n s d', s=self.num_residual_streams)
 
         normed = self.norm(residuals)
 
-        wc_weight = self.act(normed @ self.dynamic_alpha_fn)
+        wc_weight = normed @ self.dynamic_alpha_fn
         dynamic_alpha = wc_weight * self.dynamic_alpha_scale
         alpha = dynamic_alpha + self.static_alpha
 
-        dc_weight = self.act(normed @ self.dynamic_beta_fn)
+        alpha_input, alpha_residual = alpha[..., :views], alpha[..., views:]
+
+        # mHC: Sigmoid constraint on input mixing (Hpre)
+        alpha_input = alpha_input.sigmoid()
+
+        # mHC: Sinkhorn-Knopp constraint for doubly stochastic residual mixing
+        alpha_residual = rearrange(alpha_residual, '... (s1 s2) -> ... s1 s2', s2=streams)
+        alpha_residual = sinkhorn(alpha_residual, self.sinkhorn_iters)
+        alpha_residual = rearrange(alpha_residual, '... s1 s2 -> ... (s1 s2)')
+
+        alpha = cat((alpha_input, alpha_residual), dim=-1)
+
+        # mHC: Sigmoid constraint on beta with scale factor
+        dc_weight = (normed @ self.dynamic_beta_fn).sigmoid() * 2
         dynamic_beta = dc_weight * self.dynamic_beta_scale
         beta = dynamic_beta + self.static_beta
 
-        # Width connection
-        mix_h = torch.einsum('... s t, ... s d -> ... t d', alpha, residuals)
+        # mHC: Sigmoid constraint on output mixing (Hpost)
+        beta = beta.sigmoid() * 2
 
-        views = self.num_input_views
+        # Width connection
+        mix_h = einsum('... s t, ... s d -> ... t d', alpha, residuals)
 
         if views == 1:
             branch_input, residuals = mix_h[..., 0, :], mix_h[..., 1:, :]
@@ -166,7 +228,7 @@ class HyperConnectionTransform(ConnectionTransform):
 
     def apply(self, x: Tensor, residuals: Tensor, beta: Tensor, **kwargs) -> Tensor:
         """Apply hyper-connection"""
-        residuals = torch.einsum('b n d, b n s -> b n s d', x, beta) + residuals
+        residuals = einsum('b n d, b n s -> b n s d', x, beta) + residuals
         return rearrange(residuals, 'b n s d -> (b s) n d')
 
 
