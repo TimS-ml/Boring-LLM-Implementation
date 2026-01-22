@@ -11,7 +11,8 @@
 input.txt
 replace.sh
 
-design-docs/
+docs/design-docs/
+*_x-transformers*
 
 Quick*.*
 Temp*.*
